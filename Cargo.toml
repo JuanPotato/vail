@@ -1,0 +1,6 @@
+[package]
+name = "vail"
+version = "0.1.0"
+authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com>"]
+
+[dependencies]
