@@ -31,7 +31,7 @@ struct Null; // #56730bcc
 
 enum InputPeer {
     Empty, // #7f3b18ea
-    Self, // #7da07ec9
+    PeerSelf, // #7da07ec9
     Chat { // #179be863
         chat_id: i32,
     },

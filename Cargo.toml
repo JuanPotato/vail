@@ -1,6 +1,11 @@
 [package]
 name = "vail"
 version = "0.1.0"
+build = "build.rs"
 authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com>"]
 
 [dependencies]
+
+
+[build-dependencies]
+regex = "0.2"
