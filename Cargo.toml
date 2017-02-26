@@ -9,3 +9,4 @@ authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com
 
 [build-dependencies]
 regex = "0.2"
+lazy_static = "0.2"
