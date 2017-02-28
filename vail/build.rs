@@ -107,7 +107,9 @@ fn main() {
 
     // println!("{:#?}", type_counts);
 
-    for ref cons in constructors {
+    let mut done = Vec::new();
+
+    for ref cons in &constructors {
         if *type_counts.get(&cons.item_type).unwrap() == 1 &&
             cons.item_type == cons.name {
             // It's going to be a struct
@@ -132,6 +134,37 @@ fn main() {
             println!("{:#?}", cons);
         } else {
             // Its going to be an enum
+            if done.contains(&&cons.item_type) {
+                continue;
+            }
+
+            write!(tl_output, "\
+                #[derive(Debug)]\n\
+                enum {}", cons.item_type);
+
+            for similar_cons in &constructors {
+                if similar_cons.item_type != cons.item_type {
+                    continue;
+                }
+
+                write!(tl_output, "\n    {}", similar_cons.name);
+                
+                if let Some(ref args) = similar_cons.args {
+                    write!(tl_output, " {{");
+
+                    for arg in args {
+                        write!(tl_output, "\n        {}: {},\
+                        ", arg.name, tl_type_to_rust(&arg.arg_type));
+                    }
+
+                    write!(tl_output, "\n    }},\n");
+                } else {
+                    write!(tl_output, ",\n");
+                }
+            }
+
+            write!(tl_output, "}}\n\n");
+            done.push(&cons.item_type);
         }
     }
 
