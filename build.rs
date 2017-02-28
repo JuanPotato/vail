@@ -41,12 +41,30 @@ struct TlItem {
 // float is f32
 // double is f64
 
+lazy_static! {
+    static ref REPLACE_MAP: HashMap<&'static str, &'static str> = {
+        let mut map = HashMap::new();
+        map.insert("#", "u32");
+        map.insert("True", "bool");
+        map.insert("Bool", "bool");
+        map.insert("String", "String");
+        map.insert("Int", "i32");
+        map.insert("Long", "i64");
+        map.insert("long", "i64");
+        map.insert("Float", "f32");
+        map.insert("Double", "f64");
+        map.insert("Bytes","Vec<u8>");
+        map.insert("Vector", "Vec");
+        map
+    };
+}
 
 fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("tl.rs");
+    println!("{:?}", dest_path);
     let mut tl_output = File::create(&dest_path).unwrap();
     let mut tl_scheme_file = File::open("./scheme.tl").unwrap();
     let mut tl_scheme_contents = String::new();
@@ -87,11 +105,48 @@ fn main() {
         }
     }
 
-    println!("{:#?}", type_counts);
+    // println!("{:#?}", type_counts);
 
-    // for mut ref cons in constructors {
+    for ref cons in constructors {
+        if *type_counts.get(&cons.item_type).unwrap() == 1 &&
+            cons.item_type == cons.name {
+            // It's going to be a struct
+            write!(tl_output, "\
+                #[derive(Debug)]\n\
+                struct {}", cons.name);
+            
+            if let Some(ref args) = cons.args {
+                write!(tl_output, " {{");
 
-    // }
+                for arg in args {
+                    write!(tl_output, "\n    \
+                            {}: {},\
+                    ", arg.name, tl_type_to_rust(&arg.arg_type));
+                }
+
+                write!(tl_output, "\n}}\n\n");
+            } else {
+                write!(tl_output, ";\n\n");
+            }
+
+            println!("{:#?}", cons);
+        } else {
+            // Its going to be an enum
+        }
+    }
+
+    tl_output.flush();
+}
+
+fn tl_type_to_rust(s: &str) -> String {
+    let mut new_s = s.to_string();
+    for (key, val) in REPLACE_MAP.iter() {
+        if s.contains(key) {
+            new_s = new_s.replace(key, val);
+        }
+    }
+
+    new_s
 }
 
 fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
