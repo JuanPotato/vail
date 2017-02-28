@@ -3,6 +3,9 @@ extern crate lazy_static;
 
 extern crate regex;
 
+extern crate pcre;
+use pcre::{CompileOption, Match, Pcre, pcre_version};
+
 use regex::Regex;
 
 use std::collections::HashMap;
@@ -61,6 +64,7 @@ lazy_static! {
 
 fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
+    let mut filter_re: Pcre = Pcre::compile(r"([\w.]+)(?P<unique>[\w.]*?)([\w.]*) (\w*?)(\1)(\3)").unwrap();
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("tl.rs");
@@ -147,7 +151,15 @@ fn main() {
                     continue;
                 }
 
-                write!(tl_output, "\n    {}", similar_cons.name);
+                let formatted = format!("{} {}", similar_cons.name, cons.item_type);
+
+                let mut unique = filter_re.exec(&formatted).unwrap().group(2);
+
+                if unique == "" {
+                    unique = &similar_cons.name[similar_cons.name.rfind(char::is_uppercase).unwrap() .. similar_cons.name.len()];
+                }
+
+                write!(tl_output, "\n    {}", unique);
                 
                 if let Some(ref args) = similar_cons.args {
                     write!(tl_output, " {{");
