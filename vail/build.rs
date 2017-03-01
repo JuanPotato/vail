@@ -44,25 +44,6 @@ struct TlItem {
 // float is f32
 // double is f64
 
-lazy_static! {
-    static ref REPLACE_MAP: HashMap<&'static str, &'static str> = {
-        let mut map = HashMap::new();
-        map.insert("#", "u32");
-        map.insert("True", "bool");
-        map.insert("Bool", "bool");
-        map.insert("String", "String");
-        map.insert("Int", "i32");
-        map.insert("int", "i32");
-        map.insert("Long", "i64");
-        map.insert("long", "i64");
-        map.insert("Float", "f32");
-        map.insert("Double", "f64");
-        map.insert("Bytes","Vec<u8>");
-        map.insert("Vector", "Vec");
-        map
-    };
-}
-
 fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
     let mut filter_re: Pcre = Pcre::compile(r"([\w.]+)(?P<unique>[\w.]*?)([\w.]*) (\w*?)(\1)(\3)").unwrap();
@@ -222,14 +203,24 @@ fn filter_arg_name(s: &str) -> String {
 }
 
 fn tl_type_to_rust(s: &str) -> String {
-    let mut new_s = s.to_string();
-    for (key, val) in REPLACE_MAP.iter() {
-        if s.contains(key) {
-            new_s = new_s.replace(key, val);
-        }
-    }
-    
-    new_s.replace("Poi32", "Point")
+    match s {
+        "#"      => "u32",
+        "True" |
+        "Bool"   => "bool",
+        "String" => "String",
+        "Int"  |
+        "int"    => "i32",
+        "Vector<Int>" |
+        "Vector<int>" => "Vec<i32>",
+        "Long" |
+        "long"   => "i64",
+        "Vector<Long>" |
+        "Vector<long>" => "Vec<i64>",
+        "Float"  => "f32",
+        "Double" => "f64",
+        "Bytes"  => "Vec<u8>",
+        _ => s,
+    }.to_string().replace("Vector", "Vec")
 }
 
 fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
