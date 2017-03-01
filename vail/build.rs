@@ -52,6 +52,7 @@ lazy_static! {
         map.insert("Bool", "bool");
         map.insert("String", "String");
         map.insert("Int", "i32");
+        map.insert("int", "i32");
         map.insert("Long", "i64");
         map.insert("long", "i64");
         map.insert("Float", "f32");
@@ -66,7 +67,8 @@ fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
     let mut filter_re: Pcre = Pcre::compile(r"([\w.]+)(?P<unique>[\w.]*?)([\w.]*) (\w*?)(\1)(\3)").unwrap();
 
-    let out_dir = env::var("OUT_DIR").unwrap();
+    // let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = "./src/";
     let dest_path = Path::new(&out_dir).join("tl.rs");
     println!("{:?}", dest_path);
     let mut tl_output = File::create(&dest_path).unwrap();
@@ -127,7 +129,8 @@ fn main() {
                 for arg in args {
                     write!(tl_output, "\n    \
                             {}: {},\
-                    ", arg.name, tl_type_to_rust(&arg.arg_type));
+                    ", filter_arg_name(&arg.name),
+                       tl_type_to_rust(&arg.arg_type));
                 }
 
                 write!(tl_output, "\n}}\n\n");
@@ -135,7 +138,7 @@ fn main() {
                 write!(tl_output, ";\n\n");
             }
 
-            println!("{:#?}", cons);
+            // println!("{:#?}", cons);
         } else {
             // Its going to be an enum
             if done.contains(&&cons.item_type) {
@@ -144,7 +147,7 @@ fn main() {
 
             write!(tl_output, "\
                 #[derive(Debug)]\n\
-                enum {}", cons.item_type);
+                enum {} {{", cons.item_type);
 
             for similar_cons in &constructors {
                 if similar_cons.item_type != cons.item_type {
@@ -155,9 +158,13 @@ fn main() {
 
                 let mut unique = filter_re.exec(&formatted).unwrap().group(2);
 
-                if unique == "" {
-                    unique = &similar_cons.name[similar_cons.name.rfind(char::is_uppercase).unwrap() .. similar_cons.name.len()];
-                }
+                unique = match unique {
+                    "" => &similar_cons.name[similar_cons.name.rfind(char::is_uppercase).unwrap() .. similar_cons.name.len()],
+                    "Self" => "SSelf",
+                    _ => unique,
+                };
+
+                // println!("{:?}", );
 
                 write!(tl_output, "\n    {}", unique);
                 
@@ -166,7 +173,8 @@ fn main() {
 
                     for arg in args {
                         write!(tl_output, "\n        {}: {},\
-                        ", arg.name, tl_type_to_rust(&arg.arg_type));
+                        ", filter_arg_name(&arg.name),
+                           tl_type_to_rust(&arg.arg_type));
                     }
 
                     write!(tl_output, "\n    }},\n");
@@ -180,7 +188,37 @@ fn main() {
         }
     }
 
+    done.clear();
+
+    write!(tl_output, "\
+    #[derive(Debug)]\n\
+    enum TlType {{");
+
+    for ref cons in &constructors {
+        if done.contains(&&cons.item_type) {
+            continue;
+        }
+
+        write!(tl_output, "\n    \
+        {0}(Box<{0}>),", cons.item_type);
+        
+        done.push(&cons.item_type);
+    }
+
+    write!(tl_output, "\
+    \n}}");
+
     tl_output.flush();
+}
+
+fn filter_arg_name(s: &str) -> String {
+    match s {
+        "type" => "ttype",
+        "self" => "sself",
+        "final" => "ffinal",
+        "loop" => "lloop",
+        _ => s,
+    }.to_string()
 }
 
 fn tl_type_to_rust(s: &str) -> String {
@@ -190,8 +228,8 @@ fn tl_type_to_rust(s: &str) -> String {
             new_s = new_s.replace(key, val);
         }
     }
-
-    new_s
+    
+    new_s.replace("Poi32", "Point")
 }
 
 fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
