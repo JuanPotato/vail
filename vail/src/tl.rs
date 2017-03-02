@@ -100,20 +100,20 @@ enum InputMedia {
     #[tl_id = "630c9af1"]
     UploadedPhoto {
         flags: u32,
-        file: InputFile,
+        file: Box<InputFile>,
         caption: String,
         stickers: Vec<InputDocument>,
     },
 
     #[tl_id = "e9bfb4f3"]
     Photo {
-        id: InputPhoto,
+        id: Box<InputPhoto>,
         caption: String,
     },
 
     #[tl_id = "f9c44144"]
     GeoPoint {
-        geo_point: InputGeoPoint,
+        geo_point: Box<InputGeoPoint>,
     },
 
     #[tl_id = "a6e45987"]
@@ -126,7 +126,7 @@ enum InputMedia {
     #[tl_id = "d070f1e9"]
     UploadedDocument {
         flags: u32,
-        file: InputFile,
+        file: Box<InputFile>,
         mime_type: String,
         attributes: Vec<DocumentAttribute>,
         caption: String,
@@ -136,8 +136,8 @@ enum InputMedia {
     #[tl_id = "50d88cae"]
     UploadedThumbDocument {
         flags: u32,
-        file: InputFile,
-        thumb: InputFile,
+        file: Box<InputFile>,
+        thumb: Box<InputFile>,
         mime_type: String,
         attributes: Vec<DocumentAttribute>,
         caption: String,
@@ -146,13 +146,13 @@ enum InputMedia {
 
     #[tl_id = "1a77f29c"]
     Document {
-        id: InputDocument,
+        id: Box<InputDocument>,
         caption: String,
     },
 
     #[tl_id = "2827a81a"]
     Venue {
-        geo_point: InputGeoPoint,
+        geo_point: Box<InputGeoPoint>,
         title: String,
         address: String,
         provider: String,
@@ -179,7 +179,7 @@ enum InputMedia {
 
     #[tl_id = "d33f43f3"]
     Game {
-        id: InputGame,
+        id: Box<InputGame>,
     },
 }
 
@@ -190,12 +190,12 @@ enum InputChatPhoto {
 
     #[tl_id = "927c55b4"]
     Uploaded {
-        file: InputFile,
+        file: Box<InputFile>,
     },
 
     #[tl_id = "8953ad37"]
     Photo {
-        id: InputPhoto,
+        id: Box<InputPhoto>,
     },
 }
 
@@ -291,7 +291,7 @@ enum StorageFileType {
     Pdf,
 
     #[tl_id = "528a0677"]
-    Mp,
+    Mp3,
 
     #[tl_id = "4b09ebbc"]
     Mov,
@@ -300,7 +300,7 @@ enum StorageFileType {
     Partial,
 
     #[tl_id = "b3cea0e4"]
-    Mp,
+    Mp4,
 
     #[tl_id = "1081464c"]
     Webp,
@@ -367,9 +367,9 @@ enum User {
         #[flag_bit = "4"]
         phone: Option<String>,
         #[flag_bit = "5"]
-        photo: Option<UserProfilePhoto>,
+        photo: Option<Box<UserProfilePhoto>>,
         #[flag_bit = "6"]
-        status: Option<UserStatus>,
+        status: Option<Box<UserStatus>>,
         #[flag_bit = "14"]
         bot_info_version: Option<i32>,
         #[flag_bit = "18"]
@@ -387,8 +387,8 @@ enum UserProfilePhoto {
     #[tl_id = "d559d8c8"]
     Photo {
         photo_id: i64,
-        photo_small: FileLocation,
-        photo_big: FileLocation,
+        photo_small: Box<FileLocation>,
+        photo_big: Box<FileLocation>,
     },
 }
 
@@ -440,12 +440,12 @@ enum Chat {
         deactivated: Option<bool>,
         id: i32,
         title: String,
-        photo: ChatPhoto,
+        photo: Box<ChatPhoto>,
         participants_count: i32,
         date: i32,
         version: i32,
         #[flag_bit = "6"]
-        migrated_to: Option<InputChannel>,
+        migrated_to: Option<Box<InputChannel>>,
     },
 
     #[tl_id = "7328bdb"]
@@ -486,7 +486,7 @@ enum Chat {
         title: String,
         #[flag_bit = "6"]
         username: Option<String>,
-        photo: ChatPhoto,
+        photo: Box<ChatPhoto>,
         date: i32,
         version: i32,
         #[flag_bit = "9"]
@@ -511,10 +511,10 @@ enum ChatFull {
     #[tl_id = "2e02a614"]
     Full {
         id: i32,
-        participants: ChatParticipants,
-        chat_photo: Photo,
-        notify_settings: PeerNotifySettings,
-        exported_invite: ExportedChatInvite,
+        participants: Box<ChatParticipants>,
+        chat_photo: Box<Photo>,
+        notify_settings: Box<PeerNotifySettings>,
+        exported_invite: Box<ExportedChatInvite>,
         bot_info: Vec<BotInfo>,
     },
 
@@ -535,9 +535,9 @@ enum ChatFull {
         read_inbox_max_id: i32,
         read_outbox_max_id: i32,
         unread_count: i32,
-        chat_photo: Photo,
-        notify_settings: PeerNotifySettings,
-        exported_invite: ExportedChatInvite,
+        chat_photo: Box<Photo>,
+        notify_settings: Box<PeerNotifySettings>,
+        exported_invite: Box<ExportedChatInvite>,
         bot_info: Vec<BotInfo>,
         #[flag_bit = "4"]
         migrated_from_chat_id: Option<i32>,
@@ -576,7 +576,7 @@ enum ChatParticipants {
     Forbidden {
         flags: u32,
         chat_id: i32,
-        self_participant: ChatParticipant,
+        self_participant: Box<ChatParticipant>,
     },
 
     #[tl_id = "3f460fed"]
@@ -594,8 +594,8 @@ enum ChatPhoto {
 
     #[tl_id = "6153276a"]
     Photo {
-        photo_small: FileLocation,
-        photo_big: FileLocation,
+        photo_small: Box<FileLocation>,
+        photo_big: Box<FileLocation>,
     },
 }
 
@@ -622,9 +622,9 @@ enum Message {
         id: i32,
         #[flag_bit = "8"]
         from_id: Option<i32>,
-        to_id: Peer,
+        to_id: Box<Peer>,
         #[flag_bit = "2"]
-        fwd_from: Option<MessageFwdHeader>,
+        fwd_from: Option<Box<MessageFwdHeader>>,
         #[flag_bit = "11"]
         via_bot_id: Option<i32>,
         #[flag_bit = "3"]
@@ -632,9 +632,9 @@ enum Message {
         date: i32,
         message: String,
         #[flag_bit = "9"]
-        media: Option<MessageMedia>,
+        media: Option<Box<MessageMedia>>,
         #[flag_bit = "6"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
         #[flag_bit = "7"]
         entities: Option<Vec<MessageEntity>>,
         #[flag_bit = "10"]
@@ -659,11 +659,11 @@ enum Message {
         id: i32,
         #[flag_bit = "8"]
         from_id: Option<i32>,
-        to_id: Peer,
+        to_id: Box<Peer>,
         #[flag_bit = "3"]
         reply_to_msg_id: Option<i32>,
         date: i32,
-        action: MessageAction,
+        action: Box<MessageAction>,
     },
 }
 
@@ -674,13 +674,13 @@ enum MessageMedia {
 
     #[tl_id = "3d8ce53d"]
     Photo {
-        photo: Photo,
+        photo: Box<Photo>,
         caption: String,
     },
 
     #[tl_id = "56e0d474"]
     Geo {
-        geo: GeoPoint,
+        geo: Box<GeoPoint>,
     },
 
     #[tl_id = "5e7d2f39"]
@@ -696,18 +696,18 @@ enum MessageMedia {
 
     #[tl_id = "f3e02ea8"]
     Document {
-        document: Document,
+        document: Box<Document>,
         caption: String,
     },
 
     #[tl_id = "a32dd600"]
     WebPage {
-        webpage: WebPage,
+        webpage: Box<WebPage>,
     },
 
     #[tl_id = "7912b71f"]
     Venue {
-        geo: GeoPoint,
+        geo: Box<GeoPoint>,
         title: String,
         address: String,
         provider: String,
@@ -716,7 +716,7 @@ enum MessageMedia {
 
     #[tl_id = "fdb19008"]
     Game {
-        game: Game,
+        game: Box<Game>,
     },
 }
 
@@ -738,7 +738,7 @@ enum MessageAction {
 
     #[tl_id = "7fcb13a8"]
     ChatEditPhoto {
-        photo: Photo,
+        photo: Box<Photo>,
     },
 
     #[tl_id = "95e3fbef"]
@@ -791,7 +791,7 @@ enum MessageAction {
     PhoneCall {
         flags: u32,
         call_id: i64,
-        reason: PhoneCallDiscardReason,
+        reason: Box<PhoneCallDiscardReason>,
         #[flag_bit = "1"]
         duration: Option<i32>,
     },
@@ -803,15 +803,15 @@ struct Dialog {
     flags: u32,
     #[flag_bit = "2"]
     pinned: Option<bool>,
-    peer: Peer,
+    peer: Box<Peer>,
     top_message: i32,
     read_inbox_max_id: i32,
     read_outbox_max_id: i32,
     unread_count: i32,
-    notify_settings: PeerNotifySettings,
+    notify_settings: Box<PeerNotifySettings>,
     pts: i32,
     #[flag_bit = "1"]
-    draft: Option<DraftMessage>,
+    draft: Option<Box<DraftMessage>>,
 }
 
 #[derive(Debug, TlType)]
@@ -842,7 +842,7 @@ enum PhotoSize {
     #[tl_id = "77bfb61b"]
     Size {
         ttype: String,
-        location: FileLocation,
+        location: Box<FileLocation>,
         w: i32,
         h: i32,
         size: i32,
@@ -851,7 +851,7 @@ enum PhotoSize {
     #[tl_id = "e9a734fa"]
     Cached {
         ttype: String,
-        location: FileLocation,
+        location: Box<FileLocation>,
         w: i32,
         h: i32,
         bytes: Vec<u8>,
@@ -881,10 +881,10 @@ struct AuthCheckedPhone {
 struct AuthSentCode {
     flags: u32,
     phone_registered: bool,
-    ttype: AuthSentCodeType,
+    ttype: Box<AuthSentCodeType>,
     phone_code_hash: String,
     #[flag_bit = "1"]
-    next_type: Option<AuthCodeType>,
+    next_type: Option<Box<AuthCodeType>>,
     #[flag_bit = "2"]
     timeout: Option<i32>,
 }
@@ -894,7 +894,7 @@ struct AuthSentCode {
 struct AuthAuthorization {
     flags: u32,
     tmp_sessions: i32,
-    user: User,
+    user: Box<User>,
 }
 
 #[derive(Debug, TlType)]
@@ -908,7 +908,7 @@ struct AuthExportedAuthorization {
 enum InputNotifyPeer {
     #[tl_id = "b8bc5b0c"]
     Peer {
-        peer: InputPeer,
+        peer: Box<InputPeer>,
     },
 
     #[tl_id = "193b4417"]
@@ -1016,15 +1016,15 @@ struct UserFull {
     blocked: bool,
     #[flag_bit = "4"]
     phone_calls_available: Option<bool>,
-    user: User,
+    user: Box<User>,
     #[flag_bit = "1"]
     about: Option<String>,
-    link: ContactsLink,
+    link: Box<ContactsLink>,
     #[flag_bit = "2"]
-    profile_photo: Option<Photo>,
-    notify_settings: PeerNotifySettings,
+    profile_photo: Option<Box<Photo>>,
+    notify_settings: Box<PeerNotifySettings>,
     #[flag_bit = "3"]
-    bot_info: Option<BotInfo>,
+    bot_info: Option<Box<BotInfo>>,
     common_chats_count: i32,
 }
 
@@ -1053,21 +1053,21 @@ struct ContactBlocked {
 #[tl_id = "d3680c61"]
 struct ContactStatus {
     user_id: i32,
-    status: UserStatus,
+    status: Box<UserStatus>,
 }
 
 #[derive(Debug, TlType)]
 #[tl_id = "3ace484c"]
 struct ContactsLink {
-    my_link: ContactLink,
-    foreign_link: ContactLink,
-    user: User,
+    my_link: Box<ContactLink>,
+    foreign_link: Box<ContactLink>,
+    user: Box<User>,
 }
 
 #[derive(Debug, TlType)]
 enum ContactsContacts {
     #[tl_id = "b74ba9d2"]
-    NotModified,
+    ContactsNotModified,
 
     #[tl_id = "6f8b8cb2"]
     Contacts {
@@ -1130,7 +1130,7 @@ enum MessagesMessages {
     },
 
     #[tl_id = "b446ae3"]
-    Slice {
+    MessagesSlice {
         count: i32,
         messages: Vec<Message>,
         chats: Vec<Chat>,
@@ -1138,7 +1138,7 @@ enum MessagesMessages {
     },
 
     #[tl_id = "99262e37"]
-    Channel {
+    ChannelMessages {
         flags: u32,
         pts: i32,
         count: i32,
@@ -1165,7 +1165,7 @@ enum MessagesChats {
 #[derive(Debug, TlType)]
 #[tl_id = "e5d7d19c"]
 struct MessagesChatFull {
-    full_chat: ChatFull,
+    full_chat: Box<ChatFull>,
     chats: Vec<Chat>,
     users: Vec<User>,
 }
@@ -1224,7 +1224,7 @@ enum MessagesFilter {
 enum Update {
     #[tl_id = "1f2b0afd"]
     NewMessage {
-        message: Message,
+        message: Box<Message>,
         pts: i32,
         pts_count: i32,
     },
@@ -1245,25 +1245,25 @@ enum Update {
     #[tl_id = "5c486927"]
     UserTyping {
         user_id: i32,
-        action: SendMessageAction,
+        action: Box<SendMessageAction>,
     },
 
     #[tl_id = "9a65ea1f"]
     ChatUserTyping {
         chat_id: i32,
         user_id: i32,
-        action: SendMessageAction,
+        action: Box<SendMessageAction>,
     },
 
     #[tl_id = "7761198"]
     ChatParticipants {
-        participants: ChatParticipants,
+        participants: Box<ChatParticipants>,
     },
 
     #[tl_id = "1bfbd823"]
     UserStatus {
         user_id: i32,
-        status: UserStatus,
+        status: Box<UserStatus>,
     },
 
     #[tl_id = "a7332b73"]
@@ -1278,7 +1278,7 @@ enum Update {
     UserPhoto {
         user_id: i32,
         date: i32,
-        photo: UserProfilePhoto,
+        photo: Box<UserProfilePhoto>,
         previous: bool,
     },
 
@@ -1291,13 +1291,13 @@ enum Update {
     #[tl_id = "9d2e67c5"]
     ContactLink {
         user_id: i32,
-        my_link: ContactLink,
-        foreign_link: ContactLink,
+        my_link: Box<ContactLink>,
+        foreign_link: Box<ContactLink>,
     },
 
     #[tl_id = "12bcbd9a"]
     NewEncryptedMessage {
-        message: EncryptedMessage,
+        message: Box<EncryptedMessage>,
         qts: i32,
     },
 
@@ -1308,7 +1308,7 @@ enum Update {
 
     #[tl_id = "b4a2e88d"]
     Encryption {
-        chat: EncryptedChat,
+        chat: Box<EncryptedChat>,
         date: i32,
     },
 
@@ -1348,8 +1348,8 @@ enum Update {
 
     #[tl_id = "bec268ef"]
     NotifySettings {
-        peer: NotifyPeer,
-        notify_settings: PeerNotifySettings,
+        peer: Box<NotifyPeer>,
+        notify_settings: Box<PeerNotifySettings>,
     },
 
     #[tl_id = "ebe46819"]
@@ -1360,13 +1360,13 @@ enum Update {
         inbox_date: Option<i32>,
         ttype: String,
         message: String,
-        media: MessageMedia,
+        media: Box<MessageMedia>,
         entities: Vec<MessageEntity>,
     },
 
     #[tl_id = "ee3b272a"]
     Privacy {
-        key: PrivacyKey,
+        key: Box<PrivacyKey>,
         rules: Vec<PrivacyRule>,
     },
 
@@ -1378,7 +1378,7 @@ enum Update {
 
     #[tl_id = "9961fd5c"]
     ReadHistoryInbox {
-        peer: Peer,
+        peer: Box<Peer>,
         max_id: i32,
         pts: i32,
         pts_count: i32,
@@ -1386,7 +1386,7 @@ enum Update {
 
     #[tl_id = "2f2f21bf"]
     ReadHistoryOutbox {
-        peer: Peer,
+        peer: Box<Peer>,
         max_id: i32,
         pts: i32,
         pts_count: i32,
@@ -1394,7 +1394,7 @@ enum Update {
 
     #[tl_id = "7f891213"]
     WebPage {
-        webpage: WebPage,
+        webpage: Box<WebPage>,
         pts: i32,
         pts_count: i32,
     },
@@ -1420,7 +1420,7 @@ enum Update {
 
     #[tl_id = "62ba04d9"]
     NewChannelMessage {
-        message: Message,
+        message: Box<Message>,
         pts: i32,
         pts_count: i32,
     },
@@ -1463,7 +1463,7 @@ enum Update {
 
     #[tl_id = "688a30aa"]
     NewStickerSet {
-        stickerset: MessagesStickerSet,
+        stickerset: Box<MessagesStickerSet>,
     },
 
     #[tl_id = "bb2d201"]
@@ -1485,7 +1485,7 @@ enum Update {
         query_id: i64,
         user_id: i32,
         query: String,
-        geo: GeoPoint,
+        geo: Box<GeoPoint>,
         offset: String,
     },
 
@@ -1494,15 +1494,15 @@ enum Update {
         flags: u32,
         user_id: i32,
         query: String,
-        geo: GeoPoint,
+        geo: Box<GeoPoint>,
         id: String,
         #[flag_bit = "1"]
-        msg_id: Option<InputBotInlineMessageID>,
+        msg_id: Option<Box<InputBotInlineMessageID>>,
     },
 
     #[tl_id = "1b3f4df7"]
     EditChannelMessage {
-        message: Message,
+        message: Box<Message>,
         pts: i32,
         pts_count: i32,
     },
@@ -1518,7 +1518,7 @@ enum Update {
         flags: u32,
         query_id: i64,
         user_id: i32,
-        peer: Peer,
+        peer: Box<Peer>,
         msg_id: i32,
         chat_instance: i64,
         data: Vec<u8>,
@@ -1528,7 +1528,7 @@ enum Update {
 
     #[tl_id = "e40370a3"]
     EditMessage {
-        message: Message,
+        message: Box<Message>,
         pts: i32,
         pts_count: i32,
     },
@@ -1538,7 +1538,7 @@ enum Update {
         flags: u32,
         query_id: i64,
         user_id: i32,
-        msg_id: InputBotInlineMessageID,
+        msg_id: Box<InputBotInlineMessageID>,
         chat_instance: i64,
         data: Vec<u8>,
         #[flag_bit = "1"]
@@ -1553,8 +1553,8 @@ enum Update {
 
     #[tl_id = "ee2bb969"]
     DraftMessage {
-        peer: Peer,
-        draft: DraftMessage,
+        peer: Box<Peer>,
+        draft: Box<DraftMessage>,
     },
 
     #[tl_id = "571d2742"]
@@ -1572,21 +1572,21 @@ enum Update {
     #[tl_id = "40771900"]
     ChannelWebPage {
         channel_id: i32,
-        webpage: WebPage,
+        webpage: Box<WebPage>,
         pts: i32,
         pts_count: i32,
     },
 
     #[tl_id = "ab0f6b1e"]
     PhoneCall {
-        phone_call: PhoneCall,
+        phone_call: Box<PhoneCall>,
     },
 
     #[tl_id = "d711a2cc"]
     DialogPinned {
         flags: u32,
         pinned: bool,
-        peer: Peer,
+        peer: Box<Peer>,
     },
 
     #[tl_id = "d8caf68d"]
@@ -1621,7 +1621,7 @@ enum UpdatesDifference {
         other_updates: Vec<Update>,
         chats: Vec<Chat>,
         users: Vec<User>,
-        state: UpdatesState,
+        state: Box<UpdatesState>,
     },
 
     #[tl_id = "a8fb1981"]
@@ -1631,7 +1631,7 @@ enum UpdatesDifference {
         other_updates: Vec<Update>,
         chats: Vec<Chat>,
         users: Vec<User>,
-        intermediate_state: UpdatesState,
+        intermediate_state: Box<UpdatesState>,
     },
 
     #[tl_id = "4afe8f6d"]
@@ -1663,7 +1663,7 @@ enum Updates {
         pts_count: i32,
         date: i32,
         #[flag_bit = "2"]
-        fwd_from: Option<MessageFwdHeader>,
+        fwd_from: Option<Box<MessageFwdHeader>>,
         #[flag_bit = "11"]
         via_bot_id: Option<i32>,
         #[flag_bit = "3"]
@@ -1691,7 +1691,7 @@ enum Updates {
         pts_count: i32,
         date: i32,
         #[flag_bit = "2"]
-        fwd_from: Option<MessageFwdHeader>,
+        fwd_from: Option<Box<MessageFwdHeader>>,
         #[flag_bit = "11"]
         via_bot_id: Option<i32>,
         #[flag_bit = "3"]
@@ -1702,7 +1702,7 @@ enum Updates {
 
     #[tl_id = "78d4dec1"]
     UpdateShort {
-        update: Update,
+        update: Box<Update>,
         date: i32,
     },
 
@@ -1735,7 +1735,7 @@ enum Updates {
         pts_count: i32,
         date: i32,
         #[flag_bit = "9"]
-        media: Option<MessageMedia>,
+        media: Option<Box<MessageMedia>>,
         #[flag_bit = "7"]
         entities: Option<Vec<MessageEntity>>,
     },
@@ -1750,7 +1750,7 @@ enum PhotosPhotos {
     },
 
     #[tl_id = "15051f54"]
-    Slice {
+    PhotosSlice {
         count: i32,
         photos: Vec<Photo>,
         users: Vec<User>,
@@ -1760,14 +1760,14 @@ enum PhotosPhotos {
 #[derive(Debug, TlType)]
 #[tl_id = "20212ca8"]
 struct PhotosPhoto {
-    photo: Photo,
+    photo: Box<Photo>,
     users: Vec<User>,
 }
 
 #[derive(Debug, TlType)]
 #[tl_id = "96a18d5"]
 struct UploadFile {
-    ttype: StorageFileType,
+    ttype: Box<StorageFileType>,
     mtime: i32,
     bytes: Vec<u8>,
 }
@@ -1950,7 +1950,7 @@ enum EncryptedMessage {
         chat_id: i32,
         date: i32,
         bytes: Vec<u8>,
-        file: EncryptedFile,
+        file: Box<EncryptedFile>,
     },
 
     #[tl_id = "23734b06"]
@@ -1988,7 +1988,7 @@ enum MessagesSentEncryptedMessage {
     #[tl_id = "9493ff32"]
     File {
         date: i32,
-        file: EncryptedFile,
+        file: Box<EncryptedFile>,
     },
 }
 
@@ -2018,7 +2018,7 @@ enum Document {
         date: i32,
         mime_type: String,
         size: i32,
-        thumb: PhotoSize,
+        thumb: Box<PhotoSize>,
         dc_id: i32,
         version: i32,
         attributes: Vec<DocumentAttribute>,
@@ -2029,14 +2029,14 @@ enum Document {
 #[tl_id = "17c6b5f6"]
 struct HelpSupport {
     phone_number: String,
-    user: User,
+    user: Box<User>,
 }
 
 #[derive(Debug, TlType)]
 enum NotifyPeer {
     #[tl_id = "9fd40bd8"]
     Peer {
-        peer: Peer,
+        peer: Box<Peer>,
     },
 
     #[tl_id = "b4c83b4c"]
@@ -2205,8 +2205,8 @@ enum DocumentAttribute {
         #[flag_bit = "1"]
         mask: Option<bool>,
         alt: String,
-        stickerset: InputStickerSet,
-        mask_coords: MaskCoords,
+        stickerset: Box<InputStickerSet>,
+        mask_coords: Box<MaskCoords>,
     },
 
     #[tl_id = "5910cccb"]
@@ -2326,7 +2326,7 @@ enum WebPage {
         #[flag_bit = "3"]
         description: Option<String>,
         #[flag_bit = "4"]
-        photo: Option<Photo>,
+        photo: Option<Box<Photo>>,
         #[flag_bit = "5"]
         embed_url: Option<String>,
         #[flag_bit = "5"]
@@ -2340,9 +2340,9 @@ enum WebPage {
         #[flag_bit = "8"]
         author: Option<String>,
         #[flag_bit = "9"]
-        document: Option<Document>,
+        document: Option<Box<Document>>,
         #[flag_bit = "10"]
-        cached_page: Option<Page>,
+        cached_page: Option<Box<Page>>,
     },
 
     #[tl_id = "85849473"]
@@ -2424,10 +2424,10 @@ struct ReceivedNotifyMessage {
 #[derive(Debug, TlType)]
 enum ExportedChatInvite {
     #[tl_id = "69df3769"]
-    ChatInviteEmpty,
+    Empty,
 
     #[tl_id = "fc2e05bc"]
-    ChatInvite {
+    Exported {
         link: String,
     },
 }
@@ -2436,7 +2436,7 @@ enum ExportedChatInvite {
 enum ChatInvite {
     #[tl_id = "5a686d7c"]
     Already {
-        chat: Chat,
+        chat: Box<Chat>,
     },
 
     #[tl_id = "db74f558"]
@@ -2450,7 +2450,7 @@ enum ChatInvite {
         #[flag_bit = "3"]
         megagroup: Option<bool>,
         title: String,
-        photo: ChatPhoto,
+        photo: Box<ChatPhoto>,
         participants_count: i32,
         #[flag_bit = "4"]
         participants: Option<Vec<User>>,
@@ -2496,7 +2496,7 @@ struct StickerSet {
 #[derive(Debug, TlType)]
 #[tl_id = "b60a24a6"]
 struct MessagesStickerSet {
-    set: StickerSet,
+    set: Box<StickerSet>,
     packs: Vec<StickerPack>,
     documents: Vec<Document>,
 }
@@ -2608,7 +2608,7 @@ enum HelpAppChangelog {
     #[tl_id = "2a137e7c"]
     Changelog {
         message: String,
-        media: MessageMedia,
+        media: Box<MessageMedia>,
         entities: Vec<MessageEntity>,
     },
 }
@@ -2694,7 +2694,7 @@ enum MessageEntity {
     InputMentionName {
         offset: i32,
         length: i32,
-        user_id: InputUser,
+        user_id: Box<InputUser>,
     },
 }
 
@@ -2713,7 +2713,7 @@ enum InputChannel {
 #[derive(Debug, TlType)]
 #[tl_id = "7f077ad9"]
 struct ContactsResolvedPeer {
-    peer: Peer,
+    peer: Box<Peer>,
     chats: Vec<Chat>,
     users: Vec<User>,
 }
@@ -2860,7 +2860,7 @@ struct ChannelsChannelParticipants {
 #[derive(Debug, TlType)]
 #[tl_id = "d0d9b163"]
 struct ChannelsChannelParticipant {
-    participant: ChannelParticipant,
+    participant: Box<ChannelParticipant>,
     users: Vec<User>,
 }
 
@@ -2885,8 +2885,8 @@ enum FoundGif {
     #[tl_id = "9c750409"]
     Cached {
         url: String,
-        photo: Photo,
-        document: Document,
+        photo: Box<Photo>,
+        document: Box<Document>,
     },
 }
 
@@ -2916,7 +2916,7 @@ enum InputBotInlineMessage {
         flags: u32,
         caption: String,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "3dcd7a87"]
@@ -2927,27 +2927,27 @@ enum InputBotInlineMessage {
         #[flag_bit = "1"]
         entities: Option<Vec<MessageEntity>>,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "f4a59de1"]
     MediaGeo {
         flags: u32,
-        geo_point: InputGeoPoint,
+        geo_point: Box<InputGeoPoint>,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "aaafadc8"]
     MediaVenue {
         flags: u32,
-        geo_point: InputGeoPoint,
+        geo_point: Box<InputGeoPoint>,
         title: String,
         address: String,
         provider: String,
         venue_id: String,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "2daf01a7"]
@@ -2957,14 +2957,14 @@ enum InputBotInlineMessage {
         first_name: String,
         last_name: String,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "4b425864"]
     Game {
         flags: u32,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 }
 
@@ -2993,15 +2993,15 @@ enum InputBotInlineResult {
         h: Option<i32>,
         #[flag_bit = "7"]
         duration: Option<i32>,
-        send_message: InputBotInlineMessage,
+        send_message: Box<InputBotInlineMessage>,
     },
 
     #[tl_id = "a8d864a7"]
     Photo {
         id: String,
         ttype: String,
-        photo: InputPhoto,
-        send_message: InputBotInlineMessage,
+        photo: Box<InputPhoto>,
+        send_message: Box<InputBotInlineMessage>,
     },
 
     #[tl_id = "fff8fdc4"]
@@ -3013,15 +3013,15 @@ enum InputBotInlineResult {
         title: Option<String>,
         #[flag_bit = "2"]
         description: Option<String>,
-        document: InputDocument,
-        send_message: InputBotInlineMessage,
+        document: Box<InputDocument>,
+        send_message: Box<InputBotInlineMessage>,
     },
 
     #[tl_id = "4fa417f2"]
     Game {
         id: String,
         short_name: String,
-        send_message: InputBotInlineMessage,
+        send_message: Box<InputBotInlineMessage>,
     },
 }
 
@@ -3032,7 +3032,7 @@ enum BotInlineMessage {
         flags: u32,
         caption: String,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "8c7f65e2"]
@@ -3043,27 +3043,27 @@ enum BotInlineMessage {
         #[flag_bit = "1"]
         entities: Option<Vec<MessageEntity>>,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "3a8fd8b8"]
     MediaGeo {
         flags: u32,
-        geo: GeoPoint,
+        geo: Box<GeoPoint>,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "4366232e"]
     MediaVenue {
         flags: u32,
-        geo: GeoPoint,
+        geo: Box<GeoPoint>,
         title: String,
         address: String,
         provider: String,
         venue_id: String,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 
     #[tl_id = "35edb4d4"]
@@ -3073,7 +3073,7 @@ enum BotInlineMessage {
         first_name: String,
         last_name: String,
         #[flag_bit = "2"]
-        reply_markup: Option<ReplyMarkup>,
+        reply_markup: Option<Box<ReplyMarkup>>,
     },
 }
 
@@ -3102,7 +3102,7 @@ enum BotInlineResult {
         h: Option<i32>,
         #[flag_bit = "7"]
         duration: Option<i32>,
-        send_message: BotInlineMessage,
+        send_message: Box<BotInlineMessage>,
     },
 
     #[tl_id = "17db940b"]
@@ -3110,14 +3110,14 @@ enum BotInlineResult {
         flags: u32,
         id: String,
         ttype: String,
-        photo: Photo,
+        photo: Box<Photo>,
         #[flag_bit = "1"]
-        document: Option<Document>,
+        document: Option<Box<Document>>,
         #[flag_bit = "2"]
         title: Option<String>,
         #[flag_bit = "3"]
         description: Option<String>,
-        send_message: BotInlineMessage,
+        send_message: Box<BotInlineMessage>,
     },
 }
 
@@ -3130,7 +3130,7 @@ struct MessagesBotResults {
     #[flag_bit = "1"]
     next_offset: Option<String>,
     #[flag_bit = "2"]
-    switch_pm: Option<InlineBotSwitchPM>,
+    switch_pm: Option<Box<InlineBotSwitchPM>>,
     results: Vec<BotInlineResult>,
     cache_time: i32,
 }
@@ -3231,13 +3231,13 @@ struct MessagesPeerDialogs {
     messages: Vec<Message>,
     chats: Vec<Chat>,
     users: Vec<User>,
-    state: UpdatesState,
+    state: Box<UpdatesState>,
 }
 
 #[derive(Debug, TlType)]
 #[tl_id = "edcdc05b"]
 struct TopPeer {
-    peer: Peer,
+    peer: Box<Peer>,
     rating: f64,
 }
 
@@ -3262,7 +3262,7 @@ enum TopPeerCategory {
 #[derive(Debug, TlType)]
 #[tl_id = "fb834291"]
 struct TopPeerCategoryPeers {
-    category: TopPeerCategory,
+    category: Box<TopPeerCategory>,
     count: i32,
     peers: Vec<TopPeer>,
 }
@@ -3345,13 +3345,13 @@ enum MessagesStickerSetInstallResult {
 enum StickerSetCovered {
     #[tl_id = "6410a5d2"]
     Covered {
-        set: StickerSet,
-        cover: Document,
+        set: Box<StickerSet>,
+        cover: Box<Document>,
     },
 
     #[tl_id = "3407e51b"]
     Multi {
-        set: StickerSet,
+        set: Box<StickerSet>,
         covers: Vec<Document>,
     },
 }
@@ -3369,12 +3369,12 @@ struct MaskCoords {
 enum InputStickeredMedia {
     #[tl_id = "4a992157"]
     Photo {
-        id: InputPhoto,
+        id: Box<InputPhoto>,
     },
 
     #[tl_id = "438865b"]
     Document {
-        id: InputDocument,
+        id: Box<InputDocument>,
     },
 }
 
@@ -3387,8 +3387,8 @@ struct Game {
     short_name: String,
     title: String,
     description: String,
-    photo: Photo,
-    document: Document,
+    photo: Box<Photo>,
+    document: Box<Document>,
 }
 
 #[derive(Debug, TlType)]
@@ -3401,7 +3401,7 @@ enum InputGame {
 
     #[tl_id = "c331e80a"]
     ShortName {
-        bot_id: InputUser,
+        bot_id: Box<InputUser>,
         short_name: String,
     },
 }
@@ -3424,53 +3424,53 @@ struct MessagesHighScores {
 #[derive(Debug, TlType)]
 enum RichText {
     #[tl_id = "dc3d824f"]
-    TextEmpty,
+    Empty,
 
     #[tl_id = "744694e0"]
-    TextPlain {
+    Plain {
         text: String,
     },
 
     #[tl_id = "6724abc4"]
-    TextBold {
+    Bold {
         text: Box<RichText>,
     },
 
     #[tl_id = "d912a59c"]
-    TextItalic {
+    Italic {
         text: Box<RichText>,
     },
 
     #[tl_id = "c12622c4"]
-    TextUnderline {
+    Underline {
         text: Box<RichText>,
     },
 
     #[tl_id = "9bf8bb95"]
-    TextStrike {
+    Strike {
         text: Box<RichText>,
     },
 
     #[tl_id = "6c3f19b9"]
-    TextFixed {
+    Fixed {
         text: Box<RichText>,
     },
 
     #[tl_id = "3c2884c1"]
-    TextUrl {
+    Url {
         text: Box<RichText>,
         url: String,
         webpage_id: i64,
     },
 
     #[tl_id = "de5a0dd6"]
-    TextEmail {
+    Email {
         text: Box<RichText>,
         email: String,
     },
 
     #[tl_id = "7e6260d7"]
-    TextConcat {
+    Concat {
         texts: Vec<RichText>,
     },
 }
@@ -3482,44 +3482,44 @@ enum PageBlock {
 
     #[tl_id = "70abc3fd"]
     Title {
-        text: RichText,
+        text: Box<RichText>,
     },
 
     #[tl_id = "8ffa9a1f"]
     Subtitle {
-        text: RichText,
+        text: Box<RichText>,
     },
 
     #[tl_id = "baafe5e0"]
     AuthorDate {
-        author: RichText,
+        author: Box<RichText>,
         published_date: i32,
     },
 
     #[tl_id = "bfd064ec"]
     Header {
-        text: RichText,
+        text: Box<RichText>,
     },
 
     #[tl_id = "f12bb6e1"]
     Subheader {
-        text: RichText,
+        text: Box<RichText>,
     },
 
     #[tl_id = "467a0766"]
     Paragraph {
-        text: RichText,
+        text: Box<RichText>,
     },
 
     #[tl_id = "c070d93e"]
     Preformatted {
-        text: RichText,
+        text: Box<RichText>,
         language: String,
     },
 
     #[tl_id = "48870999"]
     Footer {
-        text: RichText,
+        text: Box<RichText>,
     },
 
     #[tl_id = "db20b188"]
@@ -3538,20 +3538,20 @@ enum PageBlock {
 
     #[tl_id = "263d7c26"]
     Blockquote {
-        text: RichText,
-        caption: RichText,
+        text: Box<RichText>,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "4f4456d3"]
     Pullquote {
-        text: RichText,
-        caption: RichText,
+        text: Box<RichText>,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "e9c69982"]
     Photo {
         photo_id: i64,
-        caption: RichText,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "d9d71866"]
@@ -3561,7 +3561,7 @@ enum PageBlock {
         #[flag_bit = "1"]
         lloop: Option<bool>,
         video_id: i64,
-        caption: RichText,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "39f23300"]
@@ -3583,7 +3583,7 @@ enum PageBlock {
         poster_photo_id: Option<i64>,
         w: i32,
         h: i32,
-        caption: RichText,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "292c7be9"]
@@ -3594,19 +3594,19 @@ enum PageBlock {
         author: String,
         date: i32,
         blocks: Vec<PageBlock>,
-        caption: RichText,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "8b31c4f"]
     Collage {
         items: Vec<PageBlock>,
-        caption: RichText,
+        caption: Box<RichText>,
     },
 
     #[tl_id = "130c8963"]
     Slideshow {
         items: Vec<PageBlock>,
-        caption: RichText,
+        caption: Box<RichText>,
     },
 }
 
@@ -3649,7 +3649,7 @@ enum PhoneCall {
         date: i32,
         admin_id: i32,
         participant_id: i32,
-        protocol: PhoneCallProtocol,
+        protocol: Box<PhoneCallProtocol>,
         receive_date: i32,
     },
 
@@ -3661,7 +3661,7 @@ enum PhoneCall {
         admin_id: i32,
         participant_id: i32,
         g_a: Vec<u8>,
-        protocol: PhoneCallProtocol,
+        protocol: Box<PhoneCallProtocol>,
     },
 
     #[tl_id = "ffe6ab67"]
@@ -3673,8 +3673,8 @@ enum PhoneCall {
         participant_id: i32,
         g_a_or_b: Vec<u8>,
         key_fingerprint: i64,
-        protocol: PhoneCallProtocol,
-        connection: PhoneConnection,
+        protocol: Box<PhoneCallProtocol>,
+        connection: Box<PhoneConnection>,
         alternative_connections: Vec<PhoneConnection>,
         start_date: i32,
     },
@@ -3683,7 +3683,7 @@ enum PhoneCall {
     Discarded {
         flags: u32,
         id: i64,
-        reason: PhoneCallDiscardReason,
+        reason: Box<PhoneCallDiscardReason>,
         #[flag_bit = "1"]
         duration: Option<i32>,
     },
@@ -3713,7 +3713,7 @@ struct PhoneCallProtocol {
 #[derive(Debug, TlType)]
 #[tl_id = "ec82e140"]
 struct PhonePhoneCall {
-    phone_call: PhoneCall,
+    phone_call: Box<PhoneCall>,
     users: Vec<User>,
 }
 

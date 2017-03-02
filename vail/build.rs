@@ -3,14 +3,10 @@ extern crate lazy_static;
 
 extern crate regex;
 
-extern crate pcre;
-use pcre::{CompileOption, Match, Pcre, pcre_version};
-
 use regex::Regex;
 
 use std::collections::HashMap;
 
-use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::io::Read;
@@ -55,7 +51,7 @@ fn main() {
     let mut tl_scheme_file = File::open("./scheme.tl").unwrap();
     let mut tl_scheme_contents = String::new();
 
-    tl_scheme_file.read_to_string(&mut tl_scheme_contents);
+    let _ = tl_scheme_file.read_to_string(&mut tl_scheme_contents);
 
     let mut constructors: Vec<TlItem> = Vec::new();
     let mut functions: Vec<TlItem> = Vec::new();
@@ -74,7 +70,7 @@ fn main() {
             let args = captures.name("args");
             let item_type = dot_to_camel(captures.name("type").unwrap().as_str());
 
-            let mut item = TlItem {
+            let item = TlItem {
                 name: name,
                 id: id,
                 item_type: item_type.clone(),
@@ -101,33 +97,33 @@ fn main() {
             // It's going to be a struct
 
 
-            write!(tl_output,
+            let _ = write!(tl_output,
                "#[derive(Debug, TlType)]\n\
                 #[tl_id = \"{:x}\"]\n\
                 struct {}",
                 cons.id as u32, cons.name);
 
             if let Some(ref args) = cons.args {
-                write!(tl_output, " {{");
+                let _ = write!(tl_output, " {{");
 
                 for arg in args {
                     if arg.flag_bit > 0 {
-                        write!(tl_output,
+                        let _ = write!(tl_output,
                             "\n    #[flag_bit = \"{}\"]\
                              \n    {}: Option<{}>,",
                             arg.flag_bit,
                             filter_arg_name(&arg.name),
                             tl_type_to_rust(&arg.arg_type));
                     } else {
-                        write!(tl_output, "\n    {}: {},",
+                        let _ = write!(tl_output, "\n    {}: {},",
                             filter_arg_name(&arg.name),
                             tl_type_to_rust(&arg.arg_type));
                     }
                 }
 
-                write!(tl_output, "\n}}\n\n");
+                let _ = write!(tl_output, "\n}}\n\n");
             } else {
-                write!(tl_output, ";\n\n");
+                let _ = write!(tl_output, ";\n\n");
             }
 
             // println!("{:#?}", cons);
@@ -137,7 +133,7 @@ fn main() {
                 continue;
             }
 
-            write!(tl_output,
+            let _ = write!(tl_output,
                "#[derive(Debug, TlType)]\n\
                 enum {} {{",
                 cons.item_type);
@@ -149,13 +145,13 @@ fn main() {
 
                 let unique = filter_variant(&similar_cons.name, &cons.item_type);
 
-                write!(tl_output,
+                let _ = write!(tl_output,
                     "\n    #[tl_id = \"{:x}\"]\
                     \n    {}",
                     similar_cons.id, filter_arg_name(&unique));
 
                 if let Some(ref args) = similar_cons.args {
-                    write!(tl_output, " {{");
+                    let _ = write!(tl_output, " {{");
 
                     for arg in args {
                         let mut arg_type = tl_type_to_rust(&arg.arg_type);
@@ -166,33 +162,33 @@ fn main() {
                         }
 
                         if arg.flag_bit > 0 {
-                            write!(tl_output,
+                            let _ = write!(tl_output,
                                 "\n        #[flag_bit = \"{}\"]\
                                  \n        {}: Option<{}>,",
                                 arg.flag_bit,
                                 arg_name,
                                 arg_type);
                         } else {
-                            write!(tl_output, "\n        {}: {},",
+                            let _ = write!(tl_output, "\n        {}: {},",
                                 arg_name,
                                 arg_type);
                         }
                     }
 
-                    write!(tl_output, "\n    }},\n");
+                    let _ = write!(tl_output, "\n    }},\n");
                 } else {
-                    write!(tl_output, ",\n");
+                    let _ = write!(tl_output, ",\n");
                 }
             }
 
-            write!(tl_output, "}}\n\n");
+            let _ = write!(tl_output, "}}\n\n");
             done.push(&cons.item_type);
         }
     }
 
     done.clear();
 
-    write!(tl_output,
+    let _ = write!(tl_output,
        "#[derive(Debug)]\n\
         enum TlType {{");
 
@@ -201,52 +197,65 @@ fn main() {
             continue;
         }
 
-        write!(tl_output,
+        let _ = write!(tl_output,
             "\n    {0}(Box<{0}>),",
             cons.item_type);
 
         done.push(&cons.item_type);
     }
 
-    write!(tl_output,
+    let _ = write!(tl_output,
         "\n}}");
 
-    tl_output.flush();
+    let _ = tl_output.flush();
 }
-
 
 fn filter_variant(variant: &str, type_name: &str) -> String {
     lazy_static! {
-        static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z]*").unwrap();
+        static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z0-9]*").unwrap();
     }
 
-    let mut variant_matches = WORD_RE.find_iter(variant);
-    let mut type_matches = WORD_RE.find_iter(type_name);
+    let var_matches = WORD_RE.find_iter(variant)
+                              .map(|m| m.as_str())
+                              .collect::<Vec<&str>>();
 
-    let mut v_match = variant_matches.next().unwrap();
-    let mut t_match = type_matches.next().unwrap();
+    let type_matches = WORD_RE.find_iter(type_name)
+                              .map(|m| m.as_str())
+                              .collect::<Vec<&str>>();
+
+    let mut v_index = 0;
+    let mut t_index = 0;
+
+    let v_len = var_matches.len();
+    let t_len = type_matches.len();
 
     let mut unique = String::new();
 
+    if t_index + 1 < t_len
+        && var_matches[v_index] == type_matches[t_index+1] {
+        t_index += 1;
+    }
+
     loop {
-        if v_match.as_str() == t_match.as_str() {
-            if let Some(t) = type_matches.next() {
-                t_match = t;
+        if var_matches[v_index] == type_matches[t_index] {
+            if t_index + 1 < t_len {
+                t_index += 1;
             } else {
-                while let Some(v) = variant_matches.next() {
-                    unique.push_str(v.as_str());
+                while v_index + 1 < v_len {
+                    v_index += 1;
+                    unique.push_str(var_matches[v_index]);
                 }
             }
 
-            if let Some(v) = variant_matches.next() {
-                v_match = v;
+            if v_index + 1 < v_len {
+                v_index += 1;
             } else {
                 break;
             }
         } else {
-            unique.push_str(v_match.as_str());
-            if let Some(v) = variant_matches.next() {
-                v_match = v;
+            unique.push_str(var_matches[v_index]);
+            if v_index + 1 < v_len {
+                v_index += 1;
             } else {
                 break;
             }
@@ -256,7 +265,7 @@ fn filter_variant(variant: &str, type_name: &str) -> String {
     if unique != "" {
         unique
     } else {
-        t_match.as_str().to_string()
+        type_matches[t_len-1].to_string()
     }
 }
 
@@ -273,7 +282,9 @@ fn filter_arg_name(s: &str) -> String { // This isnt nice
 }
 
 fn tl_type_to_rust(s: &str) -> String {
-    match s {
+    let mut do_box = false;
+
+    let new_s = match s {
         "#"      => "u32",
         "True" |
         "Bool"   => "bool",
@@ -289,8 +300,17 @@ fn tl_type_to_rust(s: &str) -> String {
         "Float"  => "f32",
         "Double" => "f64",
         "Bytes"  => "Vec<u8>",
-        _ => s,
-    }.to_string().replace("Vector", "Vec")
+        _ => {
+            do_box = true;
+            s
+        },
+    }.to_string().replace("Vector", "Vec");
+
+    if do_box && !new_s.contains("Vec") {
+        format!("Box<{}>", new_s)
+    } else {
+        new_s
+    }
 }
 
 fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {

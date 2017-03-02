@@ -10,4 +10,3 @@ tl_derive = { path = "../tl_derive" }
 [build-dependencies]
 regex = "0.2"
 lazy_static = "0.2"
-pcre = "0.2.3"
