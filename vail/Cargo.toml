@@ -5,6 +5,7 @@ build = "build.rs"
 authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com>"]
 
 [dependencies]
+tl_derive = { path = "../tl_derive" }
 
 [build-dependencies]
 regex = "0.2"

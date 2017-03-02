@@ -37,7 +37,7 @@ struct TlItem {
 // # is a u32, only used for the flags attribute
 // args are flags.1?true which means if the 2nd bit (0 indexed) is 1,
 //   then there will be a true object. In this case if the bit is 1
-//   then we just assume it is true and go on rather than looking for a true id 
+//   then we just assume it is true and go on rather than looking for a true id
 // X, !X, and Type are generic, so anything
 // int is i32
 // long is i64
@@ -100,18 +100,30 @@ fn main() {
         if *type_counts.get(&cons.item_type).unwrap() == 1 &&
             cons.item_type == cons.name {
             // It's going to be a struct
-            write!(tl_output, "\
-                #[derive(Debug)]\n\
-                struct {}", cons.name);
-            
+
+
+            write!(tl_output,
+               "#[derive(Debug, TlType)]\n\
+                #[tl_id = \"{:x}\"]\n\
+                struct {}",
+                cons.id as u32, cons.name);
+
             if let Some(ref args) = cons.args {
                 write!(tl_output, " {{");
 
                 for arg in args {
-                    write!(tl_output, "\n    \
-                            {}: {},\
-                    ", filter_arg_name(&arg.name),
-                       tl_type_to_rust(&arg.arg_type));
+                    if arg.flag_bit > 0 {
+                        write!(tl_output,
+                            "\n    #[flag_bit = \"{}\"]\
+                             \n    {}: Option<{}>,",
+                            arg.flag_bit,
+                            filter_arg_name(&arg.name),
+                            tl_type_to_rust(&arg.arg_type));
+                    } else {
+                        write!(tl_output, "\n    {}: {},",
+                            filter_arg_name(&arg.name),
+                            tl_type_to_rust(&arg.arg_type));
+                    }
                 }
 
                 write!(tl_output, "\n}}\n\n");
@@ -126,9 +138,10 @@ fn main() {
                 continue;
             }
 
-            write!(tl_output, "\
-                #[derive(Debug)]\n\
-                enum {} {{", cons.item_type);
+            write!(tl_output,
+               "#[derive(Debug, TlType)]\n\
+                enum {} {{",
+                cons.item_type);
 
             for similar_cons in &constructors {
                 if similar_cons.item_type != cons.item_type {
@@ -141,21 +154,40 @@ fn main() {
 
                 unique = match unique {
                     "" => &similar_cons.name[similar_cons.name.rfind(char::is_uppercase).unwrap() .. similar_cons.name.len()],
-                    "Self" => "SSelf",
+                    "Self" => "SSelf", // This isnt nice
                     _ => unique,
                 };
 
                 // println!("{:?}", );
 
-                write!(tl_output, "\n    {}", unique);
-                
+                write!(tl_output,
+                    "\n    #[tl_id = \"{:x}\"]\
+                    \n    {}",
+                    similar_cons.id, unique);
+
                 if let Some(ref args) = similar_cons.args {
                     write!(tl_output, " {{");
 
                     for arg in args {
-                        write!(tl_output, "\n        {}: {},\
-                        ", filter_arg_name(&arg.name),
-                           tl_type_to_rust(&arg.arg_type));
+                        let mut arg_type = tl_type_to_rust(&arg.arg_type);
+                        let arg_name = filter_arg_name(&arg.name);
+
+                        if arg_type == cons.item_type {
+                            arg_type = format!("Box<{}>", arg_type);
+                        }
+
+                        if arg.flag_bit > 0 {
+                            write!(tl_output,
+                                "\n        #[flag_bit = \"{}\"]\
+                                 \n        {}: Option<{}>,",
+                                arg.flag_bit,
+                                arg_name,
+                                arg_type);
+                        } else {
+                            write!(tl_output, "\n        {}: {},",
+                                arg_name,
+                                arg_type);
+                        }
                     }
 
                     write!(tl_output, "\n    }},\n");
@@ -171,28 +203,29 @@ fn main() {
 
     done.clear();
 
-    write!(tl_output, "\
-    #[derive(Debug)]\n\
-    enum TlType {{");
+    write!(tl_output,
+       "#[derive(Debug)]\n\
+        enum TlType {{");
 
     for ref cons in &constructors {
         if done.contains(&&cons.item_type) {
             continue;
         }
 
-        write!(tl_output, "\n    \
-        {0}(Box<{0}>),", cons.item_type);
-        
+        write!(tl_output,
+            "\n    {0}(Box<{0}>),",
+            cons.item_type);
+
         done.push(&cons.item_type);
     }
 
-    write!(tl_output, "\
-    \n}}");
+    write!(tl_output,
+        "\n}}");
 
     tl_output.flush();
 }
 
-fn filter_arg_name(s: &str) -> String {
+fn filter_arg_name(s: &str) -> String { // This isnt nice
     match s {
         "type" => "ttype",
         "self" => "sself",
@@ -230,7 +263,7 @@ fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
     match capture {
         Some(cap) => {
             let mut args: Vec<Arg> = Vec::new();
-            
+
             for piece in cap.as_str().trim().split_whitespace() {
                 if piece.contains('{') {
                     // This arg was something like {X:Type} which we take into account already
@@ -239,7 +272,7 @@ fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
                 if let Some(capture) = ARG_RE.captures(piece) {
                     let name = capture.name("name").unwrap().as_str().to_string();
                     let arg_type = dot_to_camel(capture.name("type").unwrap().as_str());
-                    
+
                     let flag_bit = if let Some(bit) = capture.name("flag_bit") {
                         bit.as_str().parse::<i64>().unwrap()
                     } else {
