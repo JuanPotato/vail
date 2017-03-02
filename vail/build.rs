@@ -46,7 +46,6 @@ struct TlItem {
 
 fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
-    let mut filter_re: Pcre = Pcre::compile(r"([\w.]+)(?P<unique>[\w.]*?)([\w.]*) (\w*?)(\1)(\3)").unwrap();
 
     // let out_dir = env::var("OUT_DIR").unwrap();
     let out_dir = "./src/";
@@ -148,22 +147,12 @@ fn main() {
                     continue;
                 }
 
-                let formatted = format!("{} {}", similar_cons.name, cons.item_type);
-
-                let mut unique = filter_re.exec(&formatted).unwrap().group(2);
-
-                unique = match unique {
-                    "" => &similar_cons.name[similar_cons.name.rfind(char::is_uppercase).unwrap() .. similar_cons.name.len()],
-                    "Self" => "SSelf", // This isnt nice
-                    _ => unique,
-                };
-
-                // println!("{:?}", );
+                let unique = filter_variant(&similar_cons.name, &cons.item_type);
 
                 write!(tl_output,
                     "\n    #[tl_id = \"{:x}\"]\
                     \n    {}",
-                    similar_cons.id, unique);
+                    similar_cons.id, filter_arg_name(&unique));
 
                 if let Some(ref args) = similar_cons.args {
                     write!(tl_output, " {{");
@@ -225,10 +214,58 @@ fn main() {
     tl_output.flush();
 }
 
+
+fn filter_variant(variant: &str, type_name: &str) -> String {
+    lazy_static! {
+        static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z]*").unwrap();
+    }
+
+    let mut variant_matches = WORD_RE.find_iter(variant);
+    let mut type_matches = WORD_RE.find_iter(type_name);
+
+    let mut v_match = variant_matches.next().unwrap();
+    let mut t_match = type_matches.next().unwrap();
+
+    let mut unique = String::new();
+
+    loop {
+        if v_match.as_str() == t_match.as_str() {
+            if let Some(t) = type_matches.next() {
+                t_match = t;
+            } else {
+                while let Some(v) = variant_matches.next() {
+                    unique.push_str(v.as_str());
+                }
+            }
+
+            if let Some(v) = variant_matches.next() {
+                v_match = v;
+            } else {
+                break;
+            }
+        } else {
+            unique.push_str(v_match.as_str());
+            if let Some(v) = variant_matches.next() {
+                v_match = v;
+            } else {
+                break;
+            }
+        }
+    }
+
+    if unique != "" {
+        unique
+    } else {
+        t_match.as_str().to_string()
+    }
+}
+
+
 fn filter_arg_name(s: &str) -> String { // This isnt nice
     match s {
         "type" => "ttype",
         "self" => "sself",
+        "Self" => "SSelf",
         "final" => "ffinal",
         "loop" => "lloop",
         _ => s,

@@ -291,7 +291,7 @@ enum StorageFileType {
     Pdf,
 
     #[tl_id = "528a0677"]
-    Mp3,
+    Mp,
 
     #[tl_id = "4b09ebbc"]
     Mov,
@@ -300,7 +300,7 @@ enum StorageFileType {
     Partial,
 
     #[tl_id = "b3cea0e4"]
-    Mp4,
+    Mp,
 
     #[tl_id = "1081464c"]
     Webp,
@@ -455,7 +455,7 @@ enum Chat {
     },
 
     #[tl_id = "a14dca52"]
-    nnel {
+    Channel {
         flags: u32,
         creator: bool,
         #[flag_bit = "1"]
@@ -494,7 +494,7 @@ enum Chat {
     },
 
     #[tl_id = "8537784f"]
-    nnelForbidden {
+    ChannelForbidden {
         flags: u32,
         #[flag_bit = "5"]
         broadcast: Option<bool>,
@@ -519,7 +519,7 @@ enum ChatFull {
     },
 
     #[tl_id = "c3d5512f"]
-    nnelFull {
+    ChannelFull {
         flags: u32,
         #[flag_bit = "3"]
         can_view_participants: Option<bool>,
@@ -995,16 +995,16 @@ enum WallPaper {
 #[derive(Debug, TlType)]
 enum ReportReason {
     #[tl_id = "58dbcab8"]
-    putReportReasonSpam,
+    InputSpam,
 
     #[tl_id = "1e22c78d"]
-    putReportReasonViolence,
+    InputViolence,
 
     #[tl_id = "2e59d922"]
-    putReportReasonPornography,
+    InputPornography,
 
     #[tl_id = "e1746d0a"]
-    putReportReasonOther {
+    InputOther {
         text: String,
     },
 }
@@ -1181,40 +1181,40 @@ struct MessagesAffectedHistory {
 #[derive(Debug, TlType)]
 enum MessagesFilter {
     #[tl_id = "57e2f66c"]
-    MessagesFilterEmpty,
+    InputEmpty,
 
     #[tl_id = "9609a51c"]
-    MessagesFilterPhotos,
+    InputPhotos,
 
     #[tl_id = "9fc00e65"]
-    MessagesFilterVideo,
+    InputVideo,
 
     #[tl_id = "56e9f0e4"]
-    MessagesFilterPhotoVideo,
+    InputPhotoVideo,
 
     #[tl_id = "d95e73bb"]
-    MessagesFilterPhotoVideoDocuments,
+    InputPhotoVideoDocuments,
 
     #[tl_id = "9eddf188"]
-    MessagesFilterDocument,
+    InputDocument,
 
     #[tl_id = "7ef0dd87"]
-    MessagesFilterUrl,
+    InputUrl,
 
     #[tl_id = "ffc86587"]
-    MessagesFilterGif,
+    InputGif,
 
     #[tl_id = "50f5c392"]
-    MessagesFilterVoic,
+    InputVoice,
 
     #[tl_id = "3751b49e"]
-    MessagesFilterMusic,
+    InputMusic,
 
     #[tl_id = "3a20ecb8"]
-    MessagesFilterChatPhotos,
+    InputChatPhotos,
 
     #[tl_id = "80c99768"]
-    MessagesFilterPhoneCalls {
+    InputPhoneCalls {
         flags: u32,
         missed: bool,
     },
@@ -1646,7 +1646,7 @@ enum Updates {
     TooLong,
 
     #[tl_id = "914fbf11"]
-    ShortMessage {
+    UpdateShortMessage {
         flags: u32,
         #[flag_bit = "1"]
         out: Option<bool>,
@@ -1673,7 +1673,7 @@ enum Updates {
     },
 
     #[tl_id = "16812688"]
-    ShortChatMessage {
+    UpdateShortChatMessage {
         flags: u32,
         #[flag_bit = "1"]
         out: Option<bool>,
@@ -1701,7 +1701,7 @@ enum Updates {
     },
 
     #[tl_id = "78d4dec1"]
-    Short {
+    UpdateShort {
         update: Update,
         date: i32,
     },
@@ -1726,7 +1726,7 @@ enum Updates {
     },
 
     #[tl_id = "11f1331c"]
-    ShortSentMessage {
+    UpdateShortSentMessage {
         flags: u32,
         #[flag_bit = "1"]
         out: Option<bool>,
@@ -2424,10 +2424,10 @@ struct ReceivedNotifyMessage {
 #[derive(Debug, TlType)]
 enum ExportedChatInvite {
     #[tl_id = "69df3769"]
-    Empty,
+    ChatInviteEmpty,
 
     #[tl_id = "fc2e05bc"]
-    Exported {
+    ChatInvite {
         link: String,
     },
 }
@@ -2691,7 +2691,7 @@ enum MessageEntity {
     },
 
     #[tl_id = "208e68c9"]
-    putMessageEntityMentionName {
+    InputMentionName {
         offset: i32,
         length: i32,
         user_id: InputUser,
@@ -3424,53 +3424,53 @@ struct MessagesHighScores {
 #[derive(Debug, TlType)]
 enum RichText {
     #[tl_id = "dc3d824f"]
-    Empty,
+    TextEmpty,
 
     #[tl_id = "744694e0"]
-    Plain {
+    TextPlain {
         text: String,
     },
 
     #[tl_id = "6724abc4"]
-    Bold {
+    TextBold {
         text: Box<RichText>,
     },
 
     #[tl_id = "d912a59c"]
-    Italic {
+    TextItalic {
         text: Box<RichText>,
     },
 
     #[tl_id = "c12622c4"]
-    Underline {
+    TextUnderline {
         text: Box<RichText>,
     },
 
     #[tl_id = "9bf8bb95"]
-    Strike {
+    TextStrike {
         text: Box<RichText>,
     },
 
     #[tl_id = "6c3f19b9"]
-    Fixed {
+    TextFixed {
         text: Box<RichText>,
     },
 
     #[tl_id = "3c2884c1"]
-    Url {
+    TextUrl {
         text: Box<RichText>,
         url: String,
         webpage_id: i64,
     },
 
     #[tl_id = "de5a0dd6"]
-    Email {
+    TextEmail {
         text: Box<RichText>,
         email: String,
     },
 
     #[tl_id = "7e6260d7"]
-    Concat {
+    TextConcat {
         texts: Vec<RichText>,
     },
 }
