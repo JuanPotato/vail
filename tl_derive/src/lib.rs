@@ -22,8 +22,15 @@ enum RustType {
 
     Enum {
         name: String,
-        variants: Vec<RustType>,
+        variants: Vec<RustVariant>,
     }
+}
+
+#[derive(Debug)]
+struct RustVariant {
+    name: String,
+    tl_id: u32,
+    args: Vec<RustField>,
 }
 
 impl From<syn::Field> for RustField {
@@ -108,7 +115,7 @@ impl From<syn::MacroInput> for RustType {
             syn::Body::Enum(variants) => {
                 let m_variants = Vec::new();
 
-                variants.into_iter().map(|v| v.into()).collect::<Vec<RustType>>();
+                variants.into_iter().map(|v| v.into()).collect::<Vec<RustVariant>>();
 
                 RustType::Enum {
                     name: name,
@@ -153,7 +160,7 @@ impl<'a> From<&'a syn::MacroInput> for RustType {
 
         match input.body {
             syn::Body::Enum(ref variants) => {
-                let m_variants = variants.into_iter().map(|v| v.into()).collect::<Vec<RustType>>();
+                let m_variants = variants.into_iter().map(|v| v.into()).collect::<Vec<RustVariant>>();
 
                 RustType::Enum {
                     name: name,
@@ -192,8 +199,8 @@ impl<'a> From<&'a syn::MacroInput> for RustType {
     }
 }
 
-impl From<syn::Variant> for RustType {
-    fn from(v: syn::Variant) -> RustType {
+impl From<syn::Variant> for RustVariant {
+    fn from(v: syn::Variant) -> RustVariant {
         let name = v.ident.as_ref().to_string();
 
         let args = match v.data {
@@ -214,7 +221,7 @@ impl From<syn::Variant> for RustType {
 
         let tl_id = get_attr(&v.attrs, "tl_id");
 
-        RustType::Struct {
+        RustVariant {
             name: name.clone(),
             tl_id: u32::from_str_radix(&tl_id, 16)
                 .expect(&format!("Could not parse tl_id ({}) of {}",
@@ -225,8 +232,8 @@ impl From<syn::Variant> for RustType {
     }
 }
 
-impl<'a> From<&'a syn::Variant> for RustType {
-    fn from(v: &'a syn::Variant) -> RustType {
+impl<'a> From<&'a syn::Variant> for RustVariant {
+    fn from(v: &'a syn::Variant) -> RustVariant {
         let name = v.ident.as_ref().to_string();
 
         let args = match &v.data {
@@ -247,17 +254,16 @@ impl<'a> From<&'a syn::Variant> for RustType {
 
         let tl_id = get_attr(&v.attrs, "tl_id");
 
-        RustType::Struct {
+        RustVariant {
             name: name.clone(),
             tl_id: u32::from_str_radix(&tl_id, 16)
                 .expect(&format!("Could not parse tl_id ({}) of {}",
-                                &tl_id,
-                                &name)),
+                                 &tl_id,
+                                 &name)),
             args: args,
         }
     }
 }
-
 
 
 #[proc_macro_derive(TlType, attributes(tl_id, flag_bit))]
@@ -267,8 +273,6 @@ pub fn tl_type(input: TokenStream) -> TokenStream {
     
     // Parse the string representation
     let ast = syn::parse_macro_input(&s).unwrap();
-    println!("{:#?}", ast);
-    println!("{:#?}", RustType::from(&ast));
 
     // Build the impl
     let gen = impl_tl_type(&ast);
@@ -294,9 +298,9 @@ fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
 }
 
 fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
-    let tl_id = get_attr(&ast.attrs, "tl_id");
+    let simp = RustType::from(ast);
 
-    println!("{:?}", tl_id);
+    println!("{:#?}", simp);
 
     let name = &ast.ident;
     quote! {
@@ -305,5 +309,11 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                 TlType::#name(x.into())
             }
         }
-    } // TODO Serializer serde
+
+    } // TODO Serialize
 }
+        // impl Serialize for #name {
+        //     fn from(x: #name) -> TlType {
+        //         TlType::#name(x.into())
+        //     }
+        // }

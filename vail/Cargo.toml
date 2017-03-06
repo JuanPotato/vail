@@ -1,12 +1,15 @@
 [package]
+authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com>"]
+build = "build.rs"
 name = "vail"
 version = "0.1.0"
-build = "build.rs"
-authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com>"]
-
-[dependencies]
-tl_derive = { path = "../tl_derive" }
 
 [build-dependencies]
-regex = "0.2"
 lazy_static = "0.2"
+regex = "0.2"
+
+[dependencies]
+byteorder = "1.0.0"
+
+[dependencies.tl_derive]
+path = "../tl_derive"
