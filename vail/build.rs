@@ -12,6 +12,7 @@ use std::io::Write;
 use std::io::Read;
 use std::path::Path;
 use std::i64;
+use std::env;
 
 #[derive(Debug)]
 struct Arg {
@@ -43,8 +44,8 @@ struct TlItem {
 fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
 
-    // let out_dir = env::var("OUT_DIR").unwrap();
-    let out_dir = "./src/";
+    let out_dir = env::var("OUT_DIR").unwrap();
+    // let out_dir = "./src/";
     let dest_path = Path::new(&out_dir).join("tl.rs");
     println!("{:?}", dest_path);
     let mut tl_output = File::create(&dest_path).unwrap();
