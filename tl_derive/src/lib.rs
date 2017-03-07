@@ -6,6 +6,7 @@ extern crate syn;
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use std::fmt::Write;
+
 #[derive(Debug)]
 struct RustField {
     name: String,
@@ -205,9 +206,30 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                         name = name, tl_id = tl_id);
 
             for arg in args {
-                write!(ser,
-                    "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name});\n",
-                    type_ = arg.type_, name = arg.name);
+                if arg.name == "flags" {
+                    ser.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+                    
+                    for arg in args {
+                        if arg.flag == -1 { continue; }
+                        let _ = write!(ser, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                            name = arg.name, flag = arg.flag);
+                    }
+
+                    ser.push_str(" as u32));");
+                    continue;
+                }
+
+                if arg.flag != -1 {
+                    write!(ser,
+                        "        if let Some(ref opt) = obj.{name} {{\n            \
+                                     <Self as Serialize<{type_}>>::serialize(self, opt);\n            \
+                                 }}\n",
+                        type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                } else {
+                    write!(ser,
+                        "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name});\n",
+                        type_ = arg.type_, name = arg.name);
+                }
             }
 
             ser.push_str("    }\n}\n\n");
@@ -251,11 +273,30 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                         tl_id = variant.tl_id);
 
                 for arg in &variant.args {
-                    let s = format!(
-                        "        <Self as Serialize<{type_}>>::serialize(self, &{name});\n",
-                        type_ = arg.type_, name = arg.name);
+                    if arg.name == "flags" {
+                        ser.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+                        
+                        for arg in &variant.args {
+                            if arg.flag == -1 { continue; }
+                            let _ = write!(ser, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag);
+                        }
 
-                    ser.push_str(&s);                
+                        ser.push_str(" as u32));");
+                        continue;
+                    }
+
+                    if arg.flag != -1 {
+                        write!(ser,
+                            "        if let &Some(ref opt) = {name} {{\n            \
+                                         <Self as Serialize<{type_}>>::serialize(self, opt);\n            \
+                                     }}\n",
+                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                    } else {
+                        write!(ser,
+                            "        <Self as Serialize<{type_}>>::serialize(self, &{name});\n",
+                            type_ = arg.type_, name = arg.name);
+                    }
                 }
 
                 ser.push_str("}\n")

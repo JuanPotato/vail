@@ -2,18 +2,18 @@
 extern crate tl_derive;
 extern crate byteorder;
 
-use byteorder::{LittleEndian, ByteOrder, WriteBytesExt};
-use std::io::Cursor;
+use byteorder::{LittleEndian, WriteBytesExt};
+use std::io::{Cursor, Write};
 
 mod tl;
 
-trait Serialize<A> {
-    fn serialize(&mut self, obj: &A);
+trait Serialize<T> {
+    fn serialize(&mut self, obj: &T);
 }
 
 impl Serialize<bool> for Cursor<Vec<u8>> {
     fn serialize(&mut self, obj: &bool) {
-        if obj {
+        if *obj {
             <Self as Serialize<u32>>::serialize(self, &0xbc799737u32); // False id
         } else {
             <Self as Serialize<u32>>::serialize(self, &0x997275b5u32); // True id
@@ -53,13 +53,33 @@ impl Serialize<f64> for Cursor<Vec<u8>> {
 
 impl Serialize<Vec<u8>> for Cursor<Vec<u8>> {
     fn serialize(&mut self, obj: &Vec<u8>) {
-        // bytes
+        let len = obj.len();
+        
+        if len < 254 {
+            let _ = self.write(&[obj.len() as u8]);
+            let _ = self.write_all(&obj[..]);
+            
+            for _ in 0..(4 - (len + 1) % 4) {
+                let _ = self.write(&[00u8]);
+            }
+        }
     }
 }
 
-// do String
-// do Options in the codegen
-
+impl Serialize<String> for Cursor<Vec<u8>> {
+    fn serialize(&mut self, obj: &String) {
+        let len = obj.len();
+        
+        if len < 254 {
+            let _ = self.write(&[obj.len() as u8]);
+            let _ = self.write_all(obj.as_bytes()); // heh
+            
+            for _ in 0..(4 - (len + 1) % 4) {
+                let _ = self.write(&[00u8]);
+            }
+        }
+    }
+}
 
 impl<T> Serialize<Vec<T>> for Cursor<Vec<u8>> where
         Cursor<Vec<u8>>: Serialize<T> {

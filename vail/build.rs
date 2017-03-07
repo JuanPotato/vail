@@ -108,7 +108,7 @@ fn main() {
                 let _ = write!(tl_output, " {{");
 
                 for arg in args {
-                    if arg.flag_bit > 0 {
+                    if arg.flag_bit != -1 {
                         let _ = write!(tl_output,
                             "\n    #[flag_bit = \"{}\"]\
                              \n    {}: Option<{}>,",
@@ -162,7 +162,7 @@ fn main() {
                             arg_type = format!("Box<{}>", arg_type);
                         }
 
-                        if arg.flag_bit > 0 {
+                        if arg.flag_bit != -1 {
                             let _ = write!(tl_output,
                                 "\n        #[flag_bit = \"{}\"]\
                                  \n        {}: Option<{}>,",
