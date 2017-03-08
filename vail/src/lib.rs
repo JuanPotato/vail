@@ -53,30 +53,38 @@ impl Serialize<f64> for Cursor<Vec<u8>> {
 
 impl Serialize<Vec<u8>> for Cursor<Vec<u8>> {
     fn serialize(&mut self, obj: &Vec<u8>) {
-        let len = obj.len();
+        let mut len = obj.len();
         
         if len < 254 {
-            let _ = self.write(&[obj.len() as u8]);
-            let _ = self.write_all(&obj[..]);
-            
-            for _ in 0..(4 - (len + 1) % 4) {
-                let _ = self.write(&[00u8]);
-            }
+            let _ = self.write(&[len as u8]);
+            len += 1; 
+        } else {
+            let _ = self.write_all(&[len as u8, (len >> 8) as u8, (len >> 16) as u8]); // 3 bytes
+        }
+
+        let _ = self.write_all(obj);
+
+        for _ in 0 .. (4 - len % 4) {
+            let _ = self.write(&[00u8]);
         }
     }
 }
 
 impl Serialize<String> for Cursor<Vec<u8>> {
     fn serialize(&mut self, obj: &String) {
-        let len = obj.len();
+        let mut len = obj.len();
         
         if len < 254 {
-            let _ = self.write(&[obj.len() as u8]);
-            let _ = self.write_all(obj.as_bytes()); // heh
-            
-            for _ in 0..(4 - (len + 1) % 4) {
-                let _ = self.write(&[00u8]);
-            }
+            let _ = self.write(&[len as u8]);
+            len += 1; 
+        } else {
+            let _ = self.write_all(&[len as u8, (len >> 8) as u8, (len >> 16) as u8]); // 3 bytes
+        }
+
+        let _ = self.write_all(obj.as_bytes());
+
+        for _ in 0 .. (4 - len % 4) {
+            let _ = self.write(&[00u8]);
         }
     }
 }
@@ -103,8 +111,6 @@ impl<T> Serialize<Box<T>> for Cursor<Vec<u8>> where
 #[test]
 fn test() {
     let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-    println!("{:?}", buf);
-    buf.serialize(&vec![0i32, 1i32]);
-    buf.serialize(&vec![2u32, 3u32]);
+    buf.serialize(String::from("Potato"));
     println!("{:?}", buf);
 }
