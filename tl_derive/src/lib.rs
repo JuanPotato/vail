@@ -201,8 +201,8 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
         RustType::Struct { ref name, tl_id, ref args } => {
             let mut ser = format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn serialize(&mut self, obj: &{name}) {{\n        \
-                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32);\n",
+                    fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
+                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
                         name = name, tl_id = tl_id);
 
             for arg in args {
@@ -222,17 +222,17 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                 if arg.flag != -1 {
                     write!(ser,
                         "        if let Some(ref opt) = obj.{name} {{\n            \
-                                     <Self as Serialize<{type_}>>::serialize(self, opt);\n            \
+                                     <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
                                  }}\n",
                         type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
                 } else {
                     write!(ser,
-                        "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name});\n",
+                        "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;\n",
                         type_ = arg.type_, name = arg.name);
                 }
             }
 
-            ser.push_str("    }\n}\n\n");
+            ser.push_str("Ok(())    }\n}\n\n");
 
             write!(ser,
             "impl From<{name}> for TlType {{\n    \
@@ -241,7 +241,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                 }}\n\
             }}\n", name = name);
 
-            println!("{}", ser);
+            // println!("{}", ser);
 
             let mut tokens = quote::Tokens::new();
             tokens.append(&ser);
@@ -252,7 +252,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
         RustType::Enum { ref variants, ref name } => {
             let mut ser = format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn serialize(&mut self, obj: &{name}) {{\n        \
+                    fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
                         match obj {{", name = name);
 
             for variant in variants {
@@ -269,7 +269,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                 }
 
                 write!(ser, " => {{\n
-                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32);\n",
+                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
                         tl_id = variant.tl_id);
 
                 for arg in &variant.args {
@@ -282,24 +282,24 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                                 name = arg.name, flag = arg.flag);
                         }
 
-                        ser.push_str(" as u32));");
+                        ser.push_str(" as u32))?;");
                         continue;
                     }
 
                     if arg.flag != -1 {
                         write!(ser,
                             "        if let &Some(ref opt) = {name} {{\n            \
-                                         <Self as Serialize<{type_}>>::serialize(self, opt);\n            \
+                                         <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
                                      }}\n",
                             type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
                     } else {
                         write!(ser,
-                            "        <Self as Serialize<{type_}>>::serialize(self, &{name});\n",
+                            "        <Self as Serialize<{type_}>>::serialize(self, &{name})?;\n",
                             type_ = arg.type_, name = arg.name);
                     }
                 }
 
-                ser.push_str("}\n")
+                ser.push_str("Ok(()) }\n")
             }
 
             ser.push_str("        }\n    }\n}\n");
