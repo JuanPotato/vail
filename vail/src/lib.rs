@@ -239,14 +239,14 @@ fn test_string() {
     let master_string = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     for i in 0..master_string.len() {
         let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        let s_ser = master_string[0..(i+1)].to_string();
+        let start = master_string[0..(i+1)].to_string();
 
-        buf.serialize(&s_ser);
+        buf.serialize(&start);
 
         buf.set_position(0);
-        let s_des: String = buf.deserialize().unwrap();
+        let end: String = buf.deserialize().unwrap();
         
-        assert!(s_ser == s_des, "s_ser = {}, s_des = {}", s_ser, s_des);
+        assert!(start == end, "start = {}, end = {}", start, end);
         // TODO: fuzz?
     }
 }
@@ -254,12 +254,82 @@ fn test_string() {
 #[test]
 fn test_i32() {
     let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-    let s_ser = master_string[0..(i+1)].to_string();
+    let start = -1234;
 
-    buf.serialize(&s_ser);
+    buf.serialize(&start);
 
     buf.set_position(0);
-    let s_des: String = buf.deserialize().unwrap();
+    let end = buf.deserialize::<i32>().unwrap();
         
-    assert!(s_ser == s_des, "s_ser = {}, s_des = {}", s_ser, s_des);
+    assert!(start == end, "start = {}, end = {}", start, end);
+}
+
+#[test]
+fn test_bool() {
+    let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+
+    let start1 = true;
+    let start2 = false;
+
+    buf.serialize(&start1);
+    buf.serialize(&start2);
+
+    buf.set_position(0);
+    let end1 = buf.deserialize::<bool>().unwrap();
+    let end2 = buf.deserialize::<bool>().unwrap();
+        
+    assert!(start1 == end1, "start = {}, end = {}", start1, end1);
+    assert!(start2 == end2, "start = {}, end = {}", start2, end2);
+}
+
+#[test]
+fn test_u32() {
+    let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+    let start = 1234;
+
+    buf.serialize(&start);
+
+    buf.set_position(0);
+    let end = buf.deserialize::<u32>().unwrap();
+        
+    assert!(start == end, "start = {}, end = {}", start, end);
+}
+
+#[test]
+fn test_f32() {
+    let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+    let start = 1.234;
+
+    buf.serialize(&start);
+
+    buf.set_position(0);
+    let end = buf.deserialize::<f32>().unwrap();
+        
+    assert!(start == end, "start = {}, end = {}", start, end);
+}
+
+#[test]
+fn test_i64() {
+    let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+    let start = -1234;
+
+    buf.serialize(&start);
+
+    buf.set_position(0);
+    let end = buf.deserialize::<i64>().unwrap();
+        
+    assert!(start == end, "start = {}, end = {}", start, end);
+}
+
+#[test]
+fn test_f64() {
+    let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+    let start = 1.234;
+
+    buf.serialize(&start);
+
+    buf.set_position(0);
+    let end = buf.deserialize::<f64>().unwrap();
+        
+    assert!(start == end, "start = {}, end = {}", start, end);
 }
