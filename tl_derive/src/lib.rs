@@ -199,7 +199,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
     match simp {
         RustType::Struct { ref name, tl_id, ref args } => {
-            let mut ser = format!(
+            let mut buf = format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
                         <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
@@ -207,104 +207,104 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
             for arg in args {
                 if arg.name == "flags" {
-                    ser.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+                    buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
                     
                     for arg in args {
                         if arg.flag == -1 { continue; }
-                        let _ = write!(ser, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                        let _ = write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
                             name = arg.name, flag = arg.flag);
                     }
 
-                    ser.push_str(" as u32));");
+                    buf.push_str(" as u32));");
                     continue;
                 }
 
                 if arg.flag != -1 {
-                    write!(ser,
+                    write!(buf,
                         "        if let Some(ref opt) = obj.{name} {{\n            \
                                      <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
                                  }}\n",
                         type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
                 } else {
-                    write!(ser,
+                    write!(buf,
                         "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;\n",
                         type_ = arg.type_, name = arg.name);
                 }
             }
 
-            ser.push_str("Ok(())    }\n}\n\n");
+            buf.push_str("Ok(())    }\n}\n\n");
 
-            write!(ser,
+            write!(buf,
             "impl From<{name}> for TlType {{\n    \
                 fn from(x: {name}) -> TlType {{\n        \
                     TlType::{name}(x.into())\n    \
                 }}\n\
             }}\n", name = name);
 
-            // println!("{}", ser);
+            // println!("{}", buf);
 
             let mut tokens = quote::Tokens::new();
-            tokens.append(&ser);
+            tokens.append(&buf);
 
             tokens
         }
 
         RustType::Enum { ref variants, ref name } => {
-            let mut ser = format!(
+            let mut buf = format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
                         match obj {{", name = name);
 
             for variant in variants {
-                write!(ser, "\n &{}::{}", name, variant.name);
+                write!(buf, "\n &{}::{}", name, variant.name);
 
                 if variant.args.len() > 0 {
-                    ser.push_str(" {");
+                    buf.push_str(" {");
                     
                     for arg in &variant.args {
-                        write!(ser, " ref {}, ", arg.name);
+                        write!(buf, " ref {}, ", arg.name);
                     }
 
-                    ser.push_str("} ");
+                    buf.push_str("} ");
                 }
 
-                write!(ser, " => {{\n
+                write!(buf, " => {{\n
                         <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
                         tl_id = variant.tl_id);
 
                 for arg in &variant.args {
                     if arg.name == "flags" {
-                        ser.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+                        buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
                         
                         for arg in &variant.args {
                             if arg.flag == -1 { continue; }
-                            let _ = write!(ser, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                            let _ = write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
                                 name = arg.name, flag = arg.flag);
                         }
 
-                        ser.push_str(" as u32))?;");
+                        buf.push_str(" as u32))?;");
                         continue;
                     }
 
                     if arg.flag != -1 {
-                        write!(ser,
+                        write!(buf,
                             "        if let &Some(ref opt) = {name} {{\n            \
                                          <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
                                      }}\n",
                             type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
                     } else {
-                        write!(ser,
+                        write!(buf,
                             "        <Self as Serialize<{type_}>>::serialize(self, &{name})?;\n",
                             type_ = arg.type_, name = arg.name);
                     }
                 }
 
-                ser.push_str("Ok(()) }\n")
+                buf.push_str("Ok(()) }\n")
             }
 
-            ser.push_str("        }\n    }\n}\n");
+            buf.push_str("        }\n    }\n}\n");
 
-            write!(ser,
+            write!(buf,
                 "impl From<{name}> for TlType {{
                     fn from(x: {name}) -> TlType {{
                         TlType::{name}(x.into())
@@ -313,7 +313,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
 
             let mut tokens = quote::Tokens::new();
-            tokens.append(&ser);
+            tokens.append(&buf);
 
             tokens
         }
