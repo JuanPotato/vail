@@ -2,8 +2,8 @@
 extern crate tl_derive;
 extern crate byteorder;
 
-use byteorder::{LittleEndian, WriteBytesExt, ReadBytesExt};
-use std::io::{Cursor, Write, Error};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use std::io::{Cursor, Read, Write, Error, Seek};
 use std::io;
 
 mod tl;
@@ -122,7 +122,7 @@ impl Serialize<Vec<u8>> for Cursor<Vec<u8>> {
 
         self.write_all(obj)?;
 
-        for _ in 0 .. (4 - len) % 4 {
+        for _ in 0 .. (4 - (len % 4)) % 4 {
             self.write(&[00u8])?;
         }
         
@@ -143,11 +143,35 @@ impl Serialize<String> for Cursor<Vec<u8>> {
 
         self.write_all(obj.as_bytes())?;
 
-        for _ in 0 .. (4 - len) % 4 {
+        for _ in 0 .. (4 - (len % 4)) % 4 {
             self.write(&[00u8])?;
         }
         
         Ok(())
+    }
+}
+
+impl Deserialize<String> for Cursor<Vec<u8>> {
+    fn deserialize(&mut self) -> Result<String, io::Error> {
+        let mut len = self.read_u8()? as usize;
+        
+        if len == 254 {
+            let mut buf = [0; 3];
+            self.read_exact(&mut buf)?;
+
+            len = buf[0] as usize + ((buf[1] as usize) << 8) + ((buf[2] as usize) << 16);
+        }
+
+        let mut buffer = vec![0; len];
+
+        self.read_exact(buffer.as_mut_slice())?;
+
+        if len < 254 { len += 1; }
+
+        let mut zbuf = Vec::with_capacity((4 - (len % 4)) % 4);
+        self.read_exact(&mut zbuf)?;
+
+        Ok(String::from_utf8(buffer).unwrap())
     }
 }
 
@@ -175,11 +199,17 @@ impl<T> Serialize<Box<T>> for Cursor<Vec<u8>> where
 }
 
 #[test]
-fn test() {
-    let s = "123";
-    for i in 0..s.len() {
+fn test_string() {
+    let s = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    for i in 253..256 {
         let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
         buf.serialize(&(s[0..(i+1)].to_string()));
         println!("{:?}", buf);
+
+        buf.set_position(0);
+        let s: String = buf.deserialize().unwrap();
+        println!("{:?}", s);
+
+        // what is assert
     }
 }
