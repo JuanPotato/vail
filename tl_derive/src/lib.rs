@@ -199,6 +199,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
     match simp {
         RustType::Struct { ref name, tl_id, ref args } => {
+            // Begin Serialize
             let mut buf = format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
@@ -211,8 +212,13 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                     
                     for arg in args {
                         if arg.flag == -1 { continue; }
-                        let _ = write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                            name = arg.name, flag = arg.flag);
+                        if arg.type_ != "bool" {
+                            let _ = write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag);
+                        } else {
+                            let _ = write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag);
+                        }
                     }
 
                     buf.push_str(" as u32));");
@@ -220,11 +226,15 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                 }
 
                 if arg.flag != -1 {
-                    write!(buf,
-                        "        if let Some(ref opt) = obj.{name} {{\n            \
-                                     <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
-                                 }}\n",
-                        type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                    if arg.type_ != "bool" {
+                        write!(buf,
+                            "        if let Some(ref opt) = obj.{name} {{\n            \
+                                         <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
+                                     }}\n",
+                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                    }
+                    // if it is a boolean type, it isnt going to be serialized
+                    // it just depends on the flags
                 } else {
                     write!(buf,
                         "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;\n",
@@ -233,15 +243,23 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             }
 
             buf.push_str("Ok(())    }\n}\n\n");
+            // End Serialize
 
+
+            // Begin Deserialize
+            // Soon
+            // End Deserialize
+
+
+            // Begin End
             write!(buf,
             "impl From<{name}> for TlType {{\n    \
                 fn from(x: {name}) -> TlType {{\n        \
                     TlType::{name}(x.into())\n    \
                 }}\n\
             }}\n", name = name);
+            // End From
 
-            // println!("{}", buf);
 
             let mut tokens = quote::Tokens::new();
             tokens.append(&buf);
@@ -250,6 +268,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
         }
 
         RustType::Enum { ref variants, ref name } => {
+            // Begin Serialize
             let mut buf = format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
@@ -262,7 +281,11 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                     buf.push_str(" {");
                     
                     for arg in &variant.args {
-                        write!(buf, " ref {}, ", arg.name);
+                        if arg.type_ != "bool" {
+                            write!(buf, " ref {}, ", arg.name);
+                        } else {
+                            write!(buf, " {}, ", arg.name);
+                        }
                     }
 
                     buf.push_str("} ");
@@ -278,8 +301,13 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                         
                         for arg in &variant.args {
                             if arg.flag == -1 { continue; }
-                            let _ = write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag);
+                            if arg.type_ != "bool" {
+                                let _ = write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                                    name = arg.name, flag = arg.flag);
+                            } else {
+                                let _ = write!(buf, " | if {name} {{ 1 }} else {{ 0 }} << {flag}",
+                                    name = arg.name, flag = arg.flag);                                
+                            }
                         }
 
                         buf.push_str(" as u32))?;");
@@ -287,11 +315,13 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                     }
 
                     if arg.flag != -1 {
-                        write!(buf,
-                            "        if let &Some(ref opt) = {name} {{\n            \
-                                         <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
-                                     }}\n",
-                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                        if arg.type_ != "bool" {
+                            write!(buf,
+                                "        if let &Some(ref opt) = {name} {{\n            \
+                                             <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
+                                         }}\n",
+                                type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                        }
                     } else {
                         write!(buf,
                             "        <Self as Serialize<{type_}>>::serialize(self, &{name})?;\n",
@@ -303,13 +333,22 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             }
 
             buf.push_str("        }\n    }\n}\n");
+            // End Serialize
+            
 
+            // Begin Deserialize
+            // Soon
+            // End Deserialize
+
+
+            // Begin TlType
             write!(buf,
                 "impl From<{name}> for TlType {{
                     fn from(x: {name}) -> TlType {{
                         TlType::{name}(x.into())
                     }}
                 }}", name = name);
+            // End TlType
 
 
             let mut tokens = quote::Tokens::new();

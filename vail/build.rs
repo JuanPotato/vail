@@ -108,13 +108,23 @@ fn main() {
                 let _ = write!(tl_output, " {{");
 
                 for arg in args {
+                    let arg_type = tl_type_to_rust(&arg.arg_type);
                     if arg.flag_bit != -1 {
-                        let _ = write!(tl_output,
-                            "\n    #[flag_bit = \"{}\"]\
-                             \n    {}: Option<{}>,",
-                            arg.flag_bit,
-                            filter_arg_name(&arg.name),
-                            tl_type_to_rust(&arg.arg_type));
+                        if arg_type != "bool" {
+                            let _ = write!(tl_output,
+                                "\n    #[flag_bit = \"{}\"]\
+                                 \n    {}: Option<{}>,",
+                                arg.flag_bit,
+                                filter_arg_name(&arg.name),
+                                arg_type);
+                        } else {
+                            let _ = write!(tl_output,
+                                "\n    #[flag_bit = \"{}\"]\
+                                 \n    {}: {},",
+                                arg.flag_bit,
+                                filter_arg_name(&arg.name),
+                                arg_type);
+                        }
                     } else {
                         let _ = write!(tl_output, "\n    {}: {},",
                             filter_arg_name(&arg.name),
@@ -163,12 +173,21 @@ fn main() {
                         }
 
                         if arg.flag_bit != -1 {
-                            let _ = write!(tl_output,
-                                "\n        #[flag_bit = \"{}\"]\
-                                 \n        {}: Option<{}>,",
-                                arg.flag_bit,
-                                arg_name,
-                                arg_type);
+                            if arg_type != "bool" {
+                                let _ = write!(tl_output,
+                                    "\n        #[flag_bit = \"{}\"]\
+                                     \n        {}: Option<{}>,",
+                                    arg.flag_bit,
+                                    arg_name,
+                                    arg_type);
+                            } else {
+                                let _ = write!(tl_output,
+                                    "\n        #[flag_bit = \"{}\"]\
+                                     \n        {}: {},",
+                                    arg.flag_bit,
+                                    arg_name,
+                                    arg_type);
+                            }
                         } else {
                             let _ = write!(tl_output, "\n        {}: {},",
                                 arg_name,
