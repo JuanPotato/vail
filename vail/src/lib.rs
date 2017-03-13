@@ -186,8 +186,8 @@ impl Deserialize<Vec<u8>> for Cursor<Vec<u8>> {
 
         if len < 254 { len += 1; }
 
-        let mut zbuf = Vec::with_capacity((4 - (len % 4)) % 4);
-        self.read_exact(&mut zbuf)?;
+        let mut zbuf = vec![0; (4 - (len % 4)) % 4];
+        self.read_exact(zbuf.as_mut_slice())?;
 
         Ok(buffer)
     }
@@ -240,8 +240,8 @@ fn test() {
 
     let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
     let start = tl::User::User {
-        flags: 0b111, // it ignores it anyway
-        sself: false,
+        flags: 0, // flags is generated on serialize
+        sself: true,
         contact: false,
         mutual_contact: false,
         deleted: false,
@@ -258,7 +258,7 @@ fn test() {
         last_name: Some("Potato".to_string()),
         username: None,
         phone: None,
-        photo: None,
+        photo: Some(tl::UserProfilePhoto::Empty.into()),
         status: None,
         bot_info_version: None,
         restriction_reason: None,
@@ -281,7 +281,7 @@ fn test() {
 
         if bytes.len() < 16 {
             for x in 0..(16 - bytes.len()) {
-                let num = 16 - x;
+                let num = 15 - x;
                 if num == 8 {
                     write!(s, "    ");
                 } else {
@@ -306,11 +306,15 @@ fn test() {
 
     write!(s, "\n");
 
-    println!("{}", s);
+    buf.set_position(0);
+    let end: tl::User = buf.deserialize().unwrap();
 
-    // buf.set_position(0);
-    // let end: String = buf.deserialize().unwrap();
+    println!("{:#?}", start);
+
+    println!("{}", s);
     
+    println!("{:#?}", end);
+
     // assert!(start == end, "start = {}, end = {}", start, end);
 }
 

@@ -250,46 +250,40 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             write!(buf,
                 "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
-                        assert!(self.deserialize::<u32>()? == {tl_id});\n",
+                        let is_tl_id = self.deserialize::<u32>()? == {tl_id};\n",
                         name = name, tl_id = tl_id);
 
             for arg in args {
-                if arg.name == "flags" {
-                    buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
-
-                    for arg in args {
-                        if arg.flag == -1 { continue; }
-                        if arg.type_ != "bool" {
-                            write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag).unwrap();
-                        } else {
-                            write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag).unwrap();
-                        }
-                    }
-
-                    buf.push_str(" as u32));");
-                    continue;
+                let mut is_box = false;
+                let mut fil_type = arg.type_.as_str();
+                
+                if fil_type.len() > 9 && &fil_type[0..9] == "Option < " {
+                    fil_type = &fil_type[9..fil_type.len()-2];
                 }
-
+                    
+                if fil_type.len() > 6 && &fil_type[0..6] == "Box < " {
+                    fil_type = &fil_type[6..fil_type.len()-2];
+                    is_box = true;
+                }
+                    
                 if arg.flag != -1 {
                     if arg.type_ != "bool" {
                         write!(buf,
-                            "        let {name}: Option<{type_}> = if flags & (1 << {flag}) {{\n            \
-                                         Some(self.deserialize::<{type_}>())?\n            \
-                                     }} else {{\n            \
-                                         None\n            \
-                                     }};\n",
-                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name, flag = arg.flag);
+                          "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
+                                       Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                                   }} else {{\n            \
+                                       None\n            \
+                                   }};\n",
+                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" });
                     } else {
                         write!(buf,
-                            "        let {name} = flags & (1 << {flag});\n",
+                            "        let {name} = flags & (1 << {flag}) != 0;\n",
                             name = arg.name, flag = arg.flag);
                     }
                 } else {
                     write!(buf,
-                        "        let {name} = self.deserialize::<{type_}>()?;\n",
-                        type_ = arg.type_, name = arg.name);
+                        "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
+                        type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" });
                 }
             }
 
@@ -388,7 +382,63 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
 
             // Begin Deserialize
-            // Soon
+            write!(buf,
+                "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
+                    fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
+                        let tl_id = self.deserialize::<u32>()?;
+                        match tl_id {{", name = name);
+
+            for variant in variants {
+                write!(buf, "\n {0}u32 => {{\n", variant.tl_id);
+
+                for arg in &variant.args {
+                    let mut is_box = false;
+                    let mut fil_type = arg.type_.as_str();
+
+                    if fil_type.len() > 9 && &fil_type[0..9] == "Option < " {
+                        fil_type = &fil_type[9..fil_type.len()-2];
+                    }
+
+                    if fil_type.len() > 6 && &fil_type[0..6] == "Box < " {
+                        fil_type = &fil_type[6..fil_type.len()-2];
+                        is_box = true;
+                    }
+                    
+                    if arg.flag != -1 {
+                        if arg.type_ != "bool" {
+                            write!(buf,
+                              "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
+                                           Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                                       }} else {{\n            \
+                                           None\n            \
+                                       }};\n",
+                              type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" });
+
+                        } else {
+                            write!(buf,
+                                "        let {name} = flags & (1 << {flag}) != 0;\n",
+                                name = arg.name, flag = arg.flag);
+                        }
+                    } else {
+                        write!(buf,
+                            "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
+                            type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" });
+                    }
+                }
+
+
+                write!(buf, "Ok({}::{} {{\n", name, variant.name);
+                
+                for arg in &variant.args {
+                    write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
+                }
+                
+                buf.push_str("}) }\n")
+            }
+            
+            buf.push_str("_ => {Err(io::Error::new(io::ErrorKind::NotFound, \"You gave me an id for a Type, that id was not for that type. Oh no\"))}");
+
+            buf.push_str("        }\n    }\n}\n");
             // End Deserialize
 
 
