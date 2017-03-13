@@ -235,6 +235,86 @@ impl<T> Serialize<Box<T>> for Cursor<Vec<u8>> where
 }
 
 #[test]
+fn test() {
+    use std::fmt::Write;
+
+    let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+    let start = tl::User::User {
+        flags: 0b111, // it ignores it anyway
+        sself: false,
+        contact: false,
+        mutual_contact: false,
+        deleted: false,
+        bot: false,
+        bot_chat_history: false,
+        bot_nochats: false,
+        verified: false,
+        restricted: false,
+        min: false,
+        bot_inline_geo: false,
+        id: 987654321, // need
+        access_hash: Some(123456789),
+        first_name: Some("Juan".to_string()),
+        last_name: Some("Potato".to_string()),
+        username: None,
+        phone: None,
+        photo: None,
+        status: None,
+        bot_info_version: None,
+        restriction_reason: None,
+        bot_inline_placeholder: None,
+    };
+
+    buf.serialize(&start);
+
+    let mut s: String = String::new();
+
+    for (i, bytes) in buf.get_ref().chunks(16).enumerate() { // hexdump -C
+        write!(s, "\n{:08x}  ", i * 16);
+
+        for (i, b) in bytes.iter().enumerate() {
+            if i == 8 {
+                write!(s, " ");
+            }
+            write!(s, "{:02x} ", b);
+        }
+
+        if bytes.len() < 16 {
+            for x in 0..(16 - bytes.len()) {
+                let num = 16 - x;
+                if num == 8 {
+                    write!(s, "    ");
+                } else {
+                    write!(s, "   ");
+                }
+            }
+        }
+
+        
+        write!(s, " |");
+        
+        for b in bytes {
+            if *b > 31  && *b < 127 {
+                write!(s, "{}", char::from(*b));
+            } else {
+                write!(s, ".");
+            }
+        }
+
+        write!(s, "|");
+    }
+
+    write!(s, "\n");
+
+    println!("{}", s);
+
+    // buf.set_position(0);
+    // let end: String = buf.deserialize().unwrap();
+    
+    // assert!(start == end, "start = {}, end = {}", start, end);
+}
+
+#[test]
 fn test_string() {
     let master_string = "0123456789abcdéf0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     for (i, _) in master_string.char_indices() {

@@ -209,15 +209,15 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             for arg in args {
                 if arg.name == "flags" {
                     buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
-                    
+
                     for arg in args {
                         if arg.flag == -1 { continue; }
                         if arg.type_ != "bool" {
-                            let _ = write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag);
+                            write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag).unwrap();
                         } else {
-                            let _ = write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag);
+                            write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag).unwrap();
                         }
                     }
 
@@ -247,18 +247,69 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
 
             // Begin Deserialize
-            // Soon
+            write!(buf,
+                "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
+                    fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
+                        assert!(self.deserialize::<u32>()? == {tl_id});\n",
+                        name = name, tl_id = tl_id);
+
+            for arg in args {
+                if arg.name == "flags" {
+                    buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+
+                    for arg in args {
+                        if arg.flag == -1 { continue; }
+                        if arg.type_ != "bool" {
+                            write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag).unwrap();
+                        } else {
+                            write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag).unwrap();
+                        }
+                    }
+
+                    buf.push_str(" as u32));");
+                    continue;
+                }
+
+                if arg.flag != -1 {
+                    if arg.type_ != "bool" {
+                        write!(buf,
+                            "        let {name}: Option<{type_}> = if flags & (1 << {flag}) {{\n            \
+                                         Some(self.deserialize::<{type_}>())?\n            \
+                                     }} else {{\n            \
+                                         None\n            \
+                                     }};\n",
+                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name, flag = arg.flag);
+                    } else {
+                        write!(buf,
+                            "        let {name} = flags & (1 << {flag});\n",
+                            name = arg.name, flag = arg.flag);
+                    }
+                } else {
+                    write!(buf,
+                        "        let {name} = self.deserialize::<{type_}>()?;\n",
+                        type_ = arg.type_, name = arg.name);
+                }
+            }
+
+            write!(buf, "Ok({name} {{", name = name);
+
+            for arg in args {
+                write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
+            }
+            buf.push_str("})    }\n}\n\n");
             // End Deserialize
 
 
-            // Begin End
+            // Begin TlType
             write!(buf,
             "impl From<{name}> for TlType {{\n    \
                 fn from(x: {name}) -> TlType {{\n        \
                     TlType::{name}(x.into())\n    \
                 }}\n\
             }}\n", name = name);
-            // End From
+            // End TlType
 
 
             let mut tokens = quote::Tokens::new();
@@ -279,7 +330,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
                 if variant.args.len() > 0 {
                     buf.push_str(" {");
-                    
+
                     for arg in &variant.args {
                         if arg.type_ != "bool" {
                             write!(buf, " ref {}, ", arg.name);
@@ -298,15 +349,15 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
                 for arg in &variant.args {
                     if arg.name == "flags" {
                         buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
-                        
+
                         for arg in &variant.args {
                             if arg.flag == -1 { continue; }
                             if arg.type_ != "bool" {
-                                let _ = write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag);
+                                write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
+                                    name = arg.name, flag = arg.flag).unwrap();
                             } else {
-                                let _ = write!(buf, " | if {name} {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag);                                
+                                write!(buf, " | if {name} {{ 1 }} else {{ 0 }} << {flag}",
+                                    name = arg.name, flag = arg.flag).unwrap();
                             }
                         }
 
@@ -334,7 +385,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
 
             buf.push_str("        }\n    }\n}\n");
             // End Serialize
-            
+
 
             // Begin Deserialize
             // Soon

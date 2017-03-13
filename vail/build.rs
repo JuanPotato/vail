@@ -101,7 +101,7 @@ fn main() {
             let _ = write!(tl_output,
                "#[derive(Debug, TlType)]\n\
                 #[tl_id = \"{:x}\"]\n\
-                struct {}",
+                pub struct {}",
                 cons.id as u32, cons.name);
 
             if let Some(ref args) = cons.args {
@@ -113,14 +113,14 @@ fn main() {
                         if arg_type != "bool" {
                             let _ = write!(tl_output,
                                 "\n    #[flag_bit = \"{}\"]\
-                                 \n    {}: Option<{}>,",
+                                 \n    pub {}: Option<{}>,",
                                 arg.flag_bit,
                                 filter_arg_name(&arg.name),
                                 arg_type);
                         } else {
                             let _ = write!(tl_output,
                                 "\n    #[flag_bit = \"{}\"]\
-                                 \n    {}: {},",
+                                 \n    pub {}: {},",
                                 arg.flag_bit,
                                 filter_arg_name(&arg.name),
                                 arg_type);
@@ -146,7 +146,7 @@ fn main() {
 
             let _ = write!(tl_output,
                "#[derive(Debug, TlType)]\n\
-                enum {} {{",
+                pub enum {} {{",
                 cons.item_type);
 
             for similar_cons in &constructors {
