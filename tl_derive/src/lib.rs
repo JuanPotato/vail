@@ -162,7 +162,6 @@ impl<'a> From<&'a syn::Variant> for RustVariant {
     }
 }
 
-
 #[proc_macro_derive(TlType, attributes(tl_id, flag_bit))]
 pub fn tl_type(input: TokenStream) -> TokenStream {
     // Construct a string representation of the type definition
@@ -196,8 +195,46 @@ fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
 
 fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
     let simp = RustType::from(ast);
+    let ser_str = impl_ser(&simp);
+    let des_str = impl_des(&simp);
+    let tltype_str = impl_to_tltype(&simp);
 
-    match simp {
+    let mut tokens = quote::Tokens::new();
+    tokens.append(&ser_str);
+    tokens.append(&des_str);
+    tokens.append(&tltype_str);
+
+    tokens
+}
+
+// fn impl_tl_method(ast: &syn::MacroInput) -> quote::Tokens {
+//     let simp = RustType::from(ast);
+//     let ser_str = impl_ser(&simp);
+//     let tltype_str = impl_to_tltype(&simp);
+
+//     let mut tokens = quote::Tokens::new();
+//     tokens.append(&ser_str);
+//     tokens.append(&des_str);
+//     tokens.append(&tltype_str);
+
+//     tokens
+// }
+
+fn impl_to_tltype(t: &RustType) -> String {
+    format!(
+        "impl From<{name}> for TlType {{\n    \
+            fn from(x: {name}) -> TlType {{\n        \
+                TlType::{name}(x.into())\n    \
+            }}\n\
+        }}\n",
+    name = match *t {
+        RustType::Struct { ref name, .. } => name,
+        RustType::Enum { ref name, .. } => name
+    })
+}
+
+fn impl_ser(t: &RustType) -> String {
+    match *t {
         RustType::Struct { ref name, tl_id, ref args } => {
             // Begin Serialize
             let mut buf = format!(
@@ -246,70 +283,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             // End Serialize
 
 
-            // Begin Deserialize
-            write!(buf,
-                "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
-                        let is_tl_id = self.deserialize::<u32>()? == {tl_id};\n",
-                        name = name, tl_id = tl_id);
-
-            for arg in args {
-                let mut is_box = false;
-                let mut fil_type = arg.type_.as_str();
-                
-                if fil_type.len() > 9 && &fil_type[0..9] == "Option < " {
-                    fil_type = &fil_type[9..fil_type.len()-2];
-                }
-                    
-                if fil_type.len() > 6 && &fil_type[0..6] == "Box < " {
-                    fil_type = &fil_type[6..fil_type.len()-2];
-                    is_box = true;
-                }
-                    
-                if arg.flag != -1 {
-                    if arg.type_ != "bool" {
-                        write!(buf,
-                          "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                       Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
-                                   }} else {{\n            \
-                                       None\n            \
-                                   }};\n",
-                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" });
-                    } else {
-                        write!(buf,
-                            "        let {name} = flags & (1 << {flag}) != 0;\n",
-                            name = arg.name, flag = arg.flag);
-                    }
-                } else {
-                    write!(buf,
-                        "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
-                        type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" });
-                }
-            }
-
-            write!(buf, "Ok({name} {{", name = name);
-
-            for arg in args {
-                write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
-            }
-            buf.push_str("})    }\n}\n\n");
-            // End Deserialize
-
-
-            // Begin TlType
-            write!(buf,
-            "impl From<{name}> for TlType {{\n    \
-                fn from(x: {name}) -> TlType {{\n        \
-                    TlType::{name}(x.into())\n    \
-                }}\n\
-            }}\n", name = name);
-            // End TlType
-
-
-            let mut tokens = quote::Tokens::new();
-            tokens.append(&buf);
-
-            tokens
+            buf
         }
 
         RustType::Enum { ref variants, ref name } => {
@@ -381,8 +355,70 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             // End Serialize
 
 
+            buf
+        }
+    }
+}
+
+fn impl_des(t: &RustType) -> String {
+    match *t {
+        RustType::Struct { ref name, tl_id, ref args } => {
             // Begin Deserialize
-            write!(buf,
+            let mut buf = format!(
+                "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
+                    fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
+                        let is_tl_id = self.deserialize::<u32>()? == {tl_id};\n",
+                        name = name, tl_id = tl_id);
+
+            for arg in args {
+                let mut is_box = false;
+                let mut fil_type = arg.type_.as_str();
+                
+                if fil_type.len() > 9 && &fil_type[0..9] == "Option < " {
+                    fil_type = &fil_type[9..fil_type.len()-2];
+                }
+                    
+                if fil_type.len() > 6 && &fil_type[0..6] == "Box < " {
+                    fil_type = &fil_type[6..fil_type.len()-2];
+                    is_box = true;
+                }
+                    
+                if arg.flag != -1 {
+                    if arg.type_ != "bool" {
+                        write!(buf,
+                          "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
+                                       Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                                   }} else {{\n            \
+                                       None\n            \
+                                   }};\n",
+                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" });
+                    } else {
+                        write!(buf,
+                            "        let {name} = flags & (1 << {flag}) != 0;\n",
+                            name = arg.name, flag = arg.flag);
+                    }
+                } else {
+                    write!(buf,
+                        "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
+                        type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" });
+                }
+            }
+
+            write!(buf, "Ok({name} {{", name = name);
+
+            for arg in args {
+                write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
+            }
+            buf.push_str("})    }\n}\n\n");
+            // End Deserialize
+
+
+            buf
+        }
+
+        RustType::Enum { ref variants, ref name } => {
+            // Begin Deserialize
+            let mut buf = format!(
                 "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
                         let tl_id = self.deserialize::<u32>()?;
@@ -442,20 +478,7 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
             // End Deserialize
 
 
-            // Begin TlType
-            write!(buf,
-                "impl From<{name}> for TlType {{
-                    fn from(x: {name}) -> TlType {{
-                        TlType::{name}(x.into())
-                    }}
-                }}", name = name);
-            // End TlType
-
-
-            let mut tokens = quote::Tokens::new();
-            tokens.append(&buf);
-
-            tokens
+            buf
         }
     }
 }
