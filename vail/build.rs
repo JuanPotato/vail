@@ -8,8 +8,9 @@ use regex::Regex;
 use std::collections::HashMap;
 
 use std::fs::File;
-use std::io::Write;
 use std::io::Read;
+use std::fmt::Write as FmtWrite;
+use std::io::Write as IoWrite;
 use std::path::Path;
 use std::i64;
 use std::env;
@@ -93,115 +94,21 @@ fn main() {
     let mut done = Vec::new();
 
     for ref cons in &constructors {
-        if *type_counts.get(&cons.item_type).unwrap() == 1 &&
-            cons.item_type == cons.name {
+        if *type_counts.get(&cons.item_type).unwrap() == 1 && cons.item_type == cons.name {
             // It's going to be a struct
-
-
-            let _ = write!(tl_output,
-               "#[derive(Debug, TlType)]\n\
-                #[tl_id = \"{:x}\"]\n\
-                pub struct {}",
-                cons.id as u32, cons.name);
-
-            if let Some(ref args) = cons.args {
-                let _ = write!(tl_output, " {{");
-
-                for arg in args {
-                    let arg_type = tl_type_to_rust(&arg.arg_type);
-                    if arg.flag_bit != -1 {
-                        if arg_type != "bool" {
-                            let _ = write!(tl_output,
-                                "\n    #[flag_bit = \"{}\"]\
-                                 \n    pub {}: Option<{}>,",
-                                arg.flag_bit,
-                                filter_arg_name(&arg.name),
-                                arg_type);
-                        } else {
-                            let _ = write!(tl_output,
-                                "\n    #[flag_bit = \"{}\"]\
-                                 \n    pub {}: {},",
-                                arg.flag_bit,
-                                filter_arg_name(&arg.name),
-                                arg_type);
-                        }
-                    } else {
-                        let _ = write!(tl_output, "\n    {}: {},",
-                            filter_arg_name(&arg.name),
-                            tl_type_to_rust(&arg.arg_type));
-                    }
-                }
-
-                let _ = write!(tl_output, "\n}}\n\n");
-            } else {
-                let _ = write!(tl_output, ";\n\n");
-            }
-
-            // println!("{:#?}", cons);
+            
+            let struct_output = write_struct(&cons);
+            
+            tl_output.write_all(struct_output.as_bytes());
         } else {
             // Its going to be an enum
             if done.contains(&&cons.item_type) {
                 continue;
             }
 
-            let _ = write!(tl_output,
-               "#[derive(Debug, TlType)]\n\
-                pub enum {} {{",
-                cons.item_type);
+            let enum_output = write_enum(&cons, &constructors);
+            tl_output.write_all(enum_output.as_bytes());
 
-            for similar_cons in &constructors {
-                if similar_cons.item_type != cons.item_type {
-                    continue;
-                }
-
-                let unique = filter_variant(&similar_cons.name, &cons.item_type);
-
-                let _ = write!(tl_output,
-                    "\n    #[tl_id = \"{:x}\"]\
-                    \n    {}",
-                    similar_cons.id, filter_arg_name(&unique));
-
-                if let Some(ref args) = similar_cons.args {
-                    let _ = write!(tl_output, " {{");
-
-                    for arg in args {
-                        let mut arg_type = tl_type_to_rust(&arg.arg_type);
-                        let arg_name = filter_arg_name(&arg.name);
-
-                        if arg_type == cons.item_type {
-                            arg_type = format!("Box<{}>", arg_type);
-                        }
-
-                        if arg.flag_bit != -1 {
-                            if arg_type != "bool" {
-                                let _ = write!(tl_output,
-                                    "\n        #[flag_bit = \"{}\"]\
-                                     \n        {}: Option<{}>,",
-                                    arg.flag_bit,
-                                    arg_name,
-                                    arg_type);
-                            } else {
-                                let _ = write!(tl_output,
-                                    "\n        #[flag_bit = \"{}\"]\
-                                     \n        {}: {},",
-                                    arg.flag_bit,
-                                    arg_name,
-                                    arg_type);
-                            }
-                        } else {
-                            let _ = write!(tl_output, "\n        {}: {},",
-                                arg_name,
-                                arg_type);
-                        }
-                    }
-
-                    let _ = write!(tl_output, "\n    }},\n");
-                } else {
-                    let _ = write!(tl_output, ",\n");
-                }
-            }
-
-            let _ = write!(tl_output, "}}\n\n");
             done.push(&cons.item_type);
         }
     }
@@ -228,6 +135,116 @@ fn main() {
         "\n}}");
 
     let _ = tl_output.flush();
+}
+
+fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
+    let mut output = String::new();
+
+    write!(output,
+       "#[derive(Debug, TlType)]\n\
+        pub enum {} {{",
+        tl_enum.item_type).unwrap();
+
+    for similar_cons in constructors.iter() {
+        if similar_cons.item_type != tl_enum.item_type {
+            continue;
+        }
+
+        let unique = filter_variant(&similar_cons.name, &tl_enum.item_type);
+
+        write!(output,
+            "\n    #[tl_id = \"{:x}\"]\
+            \n    {}",
+            similar_cons.id, filter_arg_name(&unique)).unwrap();
+
+        if let Some(ref args) = similar_cons.args {
+            write!(output, " {{").unwrap();
+
+            for arg in args {
+                let mut arg_type = tl_type_to_rust(&arg.arg_type);
+                let arg_name = filter_arg_name(&arg.name);
+
+                if arg_type == tl_enum.item_type {
+                    arg_type = format!("Box<{}>", arg_type);
+                }
+
+                if arg.flag_bit != -1 {
+                    if arg_type != "bool" {
+                        write!(output,
+                            "\n        #[flag_bit = \"{}\"]\
+                             \n        {}: Option<{}>,",
+                            arg.flag_bit,
+                            arg_name,
+                            arg_type).unwrap();
+                    } else {
+                        write!(output,
+                            "\n        #[flag_bit = \"{}\"]\
+                             \n        {}: {},",
+                            arg.flag_bit,
+                            arg_name,
+                            arg_type).unwrap();
+                    }
+                } else {
+                    write!(output, "\n        {}: {},",
+                        arg_name,
+                        arg_type).unwrap();
+                }
+            }
+
+            write!(output, "\n    }},\n");
+        } else {
+            write!(output, ",\n");
+        }
+    }
+
+    write!(output, "}}\n\n");
+
+    output
+}
+
+fn write_struct(tl_struct: &TlItem) -> String {
+    let mut output = String::new();
+    
+    write!(output,
+       "#[derive(Debug, TlType)]\n\
+        #[tl_id = \"{:x}\"]\n\
+        pub struct {}",
+        tl_struct.id as u32, tl_struct.name).unwrap();
+
+    if let Some(ref args) = tl_struct.args {
+        let _ = write!(output, " {{");
+
+        for arg in args {
+            let arg_type = tl_type_to_rust(&arg.arg_type);
+            if arg.flag_bit != -1 {
+                if arg_type != "bool" {
+                    write!(output,
+                        "\n    #[flag_bit = \"{}\"]\
+                         \n    pub {}: Option<{}>,",
+                        arg.flag_bit,
+                        filter_arg_name(&arg.name),
+                        arg_type).unwrap();
+                } else {
+                    write!(output,
+                        "\n    #[flag_bit = \"{}\"]\
+                         \n    pub {}: {},",
+                        arg.flag_bit,
+                        filter_arg_name(&arg.name),
+                        arg_type).unwrap();
+                }
+            } else {
+                write!(output, "\n    {}: {},",
+                    filter_arg_name(&arg.name),
+                    tl_type_to_rust(&arg.arg_type)).unwrap();
+            }
+        }
+
+        write!(output, "\n}}\n\n").unwrap();
+    } else {
+        write!(output, ";\n\n").unwrap();
+    }
+
+    output
 }
 
 fn filter_variant(variant: &str, type_name: &str) -> String {
