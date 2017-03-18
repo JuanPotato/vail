@@ -117,7 +117,7 @@ fn main() {
 
     let _ = write!(tl_output,
        "#[derive(Debug)]\n\
-        enum TlType {{");
+        enum TlType {{").unwrap();
 
     for ref cons in &constructors {
         if done.contains(&&cons.item_type) {
@@ -126,16 +126,22 @@ fn main() {
 
         let _ = write!(tl_output,
             "\n    {0}(Box<{0}>),",
-            cons.item_type);
+            cons.item_type).unwrap();
 
         done.push(&cons.item_type);
     }
 
     let _ = write!(tl_output,
-        "\n}}");
+        "\n}}").unwrap();
 
     let _ = tl_output.flush();
 }
+
+/*
+fn write_func(tl_func: &TlItem) -> String {
+
+}
+*/
 
 fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
     let mut output = String::new();
@@ -191,13 +197,13 @@ fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
                 }
             }
 
-            write!(output, "\n    }},\n");
+            write!(output, "\n    }},\n").unwrap();
         } else {
-            write!(output, ",\n");
+            write!(output, ",\n").unwrap();
         }
     }
 
-    write!(output, "}}\n\n");
+    write!(output, "}}\n\n").unwrap();
 
     output
 }
@@ -212,7 +218,7 @@ fn write_struct(tl_struct: &TlItem) -> String {
         tl_struct.id as u32, tl_struct.name).unwrap();
 
     if let Some(ref args) = tl_struct.args {
-        let _ = write!(output, " {{");
+        let _ = write!(output, " {{").unwrap();
 
         for arg in args {
             let arg_type = tl_type_to_rust(&arg.arg_type);

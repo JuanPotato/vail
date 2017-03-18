@@ -2,9 +2,6 @@
 extern crate tl_derive;
 extern crate byteorder;
 
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-
-use std::io::{Cursor, Read, Write};
 use std::io;
 
 use std::net::TcpStream;
@@ -13,8 +10,6 @@ use std::net::TcpStream;
 mod tl;
 mod serialize;
 mod deserialize;
-
-use deserialize::Deserializer;
 
 #[derive(Debug)]
 enum TlErrors {

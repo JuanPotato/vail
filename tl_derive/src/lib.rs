@@ -177,6 +177,23 @@ pub fn tl_type(input: TokenStream) -> TokenStream {
     gen.parse().unwrap()
 }
 
+/*
+#[proc_macro_derive(TlFunc, attributes(return_type))]
+pub fn tl_func(input: TokenStream) -> TokenStream {
+    // Construct a string representation of the type definition
+    let s = input.to_string();
+
+    // Parse the string representation
+    let ast = syn::parse_macro_input(&s).unwrap();
+
+    // Build the impl
+    let gen = impl_tl_func(&ast);
+
+    // Return the generated impl
+    gen.parse().unwrap()
+}
+*/
+
 fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
     let mut val = String::new();
 
@@ -207,18 +224,19 @@ fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
     tokens
 }
 
-// fn impl_tl_method(ast: &syn::MacroInput) -> quote::Tokens {
-//     let simp = RustType::from(ast);
-//     let ser_str = impl_ser(&simp);
-//     let tltype_str = impl_to_tltype(&simp);
+/*
+fn impl_tl_func(ast: &syn::MacroInput) -> quote::Tokens {
+    let simp = RustType::from(ast);
+    let ser_str = impl_ser(&simp);
+    let fn_str = impl_fn(&simp);
 
-//     let mut tokens = quote::Tokens::new();
-//     tokens.append(&ser_str);
-//     tokens.append(&des_str);
-//     tokens.append(&tltype_str);
+    let mut tokens = quote::Tokens::new();
+    tokens.append(&ser_str);
+    tokens.append(&fn_str);
 
-//     tokens
-// }
+    tokens
+}
+*/
 
 fn impl_to_tltype(t: &RustType) -> String {
     format!(
@@ -268,14 +286,14 @@ fn impl_ser(t: &RustType) -> String {
                             "        if let Some(ref opt) = obj.{name} {{\n            \
                                          <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
                                      }}\n",
-                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
                     }
                     // if it is a boolean type, it isnt going to be serialized
                     // it just depends on the flags
                 } else {
                     write!(buf,
                         "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;\n",
-                        type_ = arg.type_, name = arg.name);
+                        type_ = arg.type_, name = arg.name).unwrap();
                 }
             }
 
@@ -294,16 +312,16 @@ fn impl_ser(t: &RustType) -> String {
                         match obj {{", name = name);
 
             for variant in variants {
-                write!(buf, "\n &{}::{}", name, variant.name);
+                write!(buf, "\n &{}::{}", name, variant.name).unwrap();
 
                 if variant.args.len() > 0 {
                     buf.push_str(" {");
 
                     for arg in &variant.args {
                         if arg.type_ != "bool" {
-                            write!(buf, " ref {}, ", arg.name);
+                            write!(buf, " ref {}, ", arg.name).unwrap();
                         } else {
-                            write!(buf, " {}, ", arg.name);
+                            write!(buf, " {}, ", arg.name).unwrap();
                         }
                     }
 
@@ -312,7 +330,7 @@ fn impl_ser(t: &RustType) -> String {
 
                 write!(buf, " => {{\n
                         <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
-                        tl_id = variant.tl_id);
+                        tl_id = variant.tl_id).unwrap();
 
                 for arg in &variant.args {
                     if arg.name == "flags" {
@@ -339,12 +357,12 @@ fn impl_ser(t: &RustType) -> String {
                                 "        if let &Some(ref opt) = {name} {{\n            \
                                              <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
                                          }}\n",
-                                type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name);
+                                type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
                         }
                     } else {
                         write!(buf,
                             "        <Self as Serialize<{type_}>>::serialize(self, &{name})?;\n",
-                            type_ = arg.type_, name = arg.name);
+                            type_ = arg.type_, name = arg.name).unwrap();
                     }
                 }
 
@@ -391,24 +409,25 @@ fn impl_des(t: &RustType) -> String {
                                    }} else {{\n            \
                                        None\n            \
                                    }};\n",
-                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" });
+                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
                     } else {
                         write!(buf,
                             "        let {name} = flags & (1 << {flag}) != 0;\n",
-                            name = arg.name, flag = arg.flag);
+                            name = arg.name, flag = arg.flag).unwrap();
                     }
                 } else {
                     write!(buf,
                         "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
-                        type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" });
+                        type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" }).unwrap();
                 }
             }
 
-            write!(buf, "Ok({name} {{", name = name);
+            write!(buf, "Ok({name} {{", name = name).unwrap();
 
             for arg in args {
                 write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
             }
+            
             buf.push_str("})    }\n}\n\n");
             // End Deserialize
 
@@ -425,7 +444,7 @@ fn impl_des(t: &RustType) -> String {
                         match tl_id {{", name = name);
 
             for variant in variants {
-                write!(buf, "\n {0}u32 => {{\n", variant.tl_id);
+                write!(buf, "\n {0}u32 => {{\n", variant.tl_id).unwrap();
 
                 for arg in &variant.args {
                     let mut is_box = false;
@@ -448,22 +467,22 @@ fn impl_des(t: &RustType) -> String {
                                        }} else {{\n            \
                                            None\n            \
                                        }};\n",
-                              type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" });
+                              type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
 
                         } else {
                             write!(buf,
                                 "        let {name} = flags & (1 << {flag}) != 0;\n",
-                                name = arg.name, flag = arg.flag);
+                                name = arg.name, flag = arg.flag).unwrap();
                         }
                     } else {
                         write!(buf,
                             "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
-                            type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" });
+                            type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" }).unwrap();
                     }
                 }
 
 
-                write!(buf, "Ok({}::{} {{\n", name, variant.name);
+                write!(buf, "Ok({}::{} {{\n", name, variant.name).unwrap();
                 
                 for arg in &variant.args {
                     write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
