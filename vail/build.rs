@@ -99,7 +99,7 @@ fn main() {
             
             let struct_output = write_struct(&cons);
             
-            tl_output.write_all(struct_output.as_bytes());
+            tl_output.write_all(struct_output.as_bytes()).unwrap();
         } else {
             // Its going to be an enum
             if done.contains(&&cons.item_type) {
@@ -107,7 +107,7 @@ fn main() {
             }
 
             let enum_output = write_enum(&cons, &constructors);
-            tl_output.write_all(enum_output.as_bytes());
+            tl_output.write_all(enum_output.as_bytes()).unwrap();
 
             done.push(&cons.item_type);
         }
@@ -147,7 +147,7 @@ fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
     let mut output = String::new();
 
     write!(output,
-       "#[derive(Debug, TlType)]\n\
+       "#[derive(Debug, ToTlType, TlSer, TlDes)]\n\
         pub enum {} {{",
         tl_enum.item_type).unwrap();
 
@@ -212,7 +212,7 @@ fn write_struct(tl_struct: &TlItem) -> String {
     let mut output = String::new();
     
     write!(output,
-       "#[derive(Debug, TlType)]\n\
+       "#[derive(Debug, ToTlType, TlSer, TlDes)]\n\
         #[tl_id = \"{:x}\"]\n\
         pub struct {}",
         tl_struct.id as u32, tl_struct.name).unwrap();

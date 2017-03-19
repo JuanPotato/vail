@@ -162,37 +162,79 @@ impl<'a> From<&'a syn::Variant> for RustVariant {
     }
 }
 
-#[proc_macro_derive(TlType, attributes(tl_id, flag_bit))]
-pub fn tl_type(input: TokenStream) -> TokenStream {
-    // Construct a string representation of the type definition
+#[proc_macro_derive(ToTlType)]
+pub fn to_tltype(input: TokenStream) -> TokenStream {
     let s = input.to_string();
 
-    // Parse the string representation
     let ast = syn::parse_macro_input(&s).unwrap();
+    let simp = RustType::from(ast);
 
-    // Build the impl
-    let gen = impl_tl_type(&ast);
+    let gen = impl_to_tltype(&simp);
 
-    // Return the generated impl
     gen.parse().unwrap()
 }
 
-/*
-#[proc_macro_derive(TlFunc, attributes(return_type))]
-pub fn tl_func(input: TokenStream) -> TokenStream {
-    // Construct a string representation of the type definition
+#[proc_macro_derive(TlSer, attributes(tl_id, flag_bit))]
+pub fn tl_ser(input: TokenStream) -> TokenStream {
     let s = input.to_string();
 
-    // Parse the string representation
     let ast = syn::parse_macro_input(&s).unwrap();
+    let simp = RustType::from(ast);
+    
+    let gen = impl_ser(&simp);
 
-    // Build the impl
-    let gen = impl_tl_func(&ast);
-
-    // Return the generated impl
     gen.parse().unwrap()
 }
-*/
+
+#[proc_macro_derive(TlDes, attributes(tl_id, flag_bit))]
+pub fn tl_des(input: TokenStream) -> TokenStream {
+    let s = input.to_string();
+
+    let ast = syn::parse_macro_input(&s).unwrap();
+    let simp = RustType::from(ast);
+
+    let gen = impl_des(&simp);
+
+    gen.parse().unwrap()
+}
+
+// For functions we need to provide a set of builder functions.
+//
+//
+// ```
+// let a = GetMessages::new().something("yeah").build();
+// mtproto.send(a);
+// ```
+// fn send<T>(obj: &T) where T can Serialize
+//
+// or 
+//
+// ```
+// let a = GetMessages::new().something("yeah");
+// mtproto.send(a)
+// ```
+// fn send<T>(obj: &T) where T can IntoSerialize
+//
+//
+// or
+//
+// ```
+// GetMessages::new().something("yeah").send(mtproto);
+// ```
+// trait TlFunction { fn send(mtp: &Mtproto) -> Result<(), Error> }
+//
+
+// #[proc_macro_derive(TlFunc, attributes(return_type))]
+// pub fn tl_func(input: TokenStream) -> TokenStream {
+//     let s = input.to_string();
+
+//     let ast = syn::parse_macro_input(&s).unwrap();
+//     let simp = RustType::from(ast);
+
+//     let gen = impl_func(&simp);
+
+//     gen.parse().unwrap()
+// }
 
 fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
     let mut val = String::new();
@@ -210,34 +252,6 @@ fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
     val
 }
 
-fn impl_tl_type(ast: &syn::MacroInput) -> quote::Tokens {
-    let simp = RustType::from(ast);
-    let ser_str = impl_ser(&simp);
-    let des_str = impl_des(&simp);
-    let tltype_str = impl_to_tltype(&simp);
-
-    let mut tokens = quote::Tokens::new();
-    tokens.append(&ser_str);
-    tokens.append(&des_str);
-    tokens.append(&tltype_str);
-
-    tokens
-}
-
-/*
-fn impl_tl_func(ast: &syn::MacroInput) -> quote::Tokens {
-    let simp = RustType::from(ast);
-    let ser_str = impl_ser(&simp);
-    let fn_str = impl_fn(&simp);
-
-    let mut tokens = quote::Tokens::new();
-    tokens.append(&ser_str);
-    tokens.append(&fn_str);
-
-    tokens
-}
-*/
-
 fn impl_to_tltype(t: &RustType) -> String {
     format!(
         "impl From<{name}> for TlType {{\n    \
@@ -250,6 +264,19 @@ fn impl_to_tltype(t: &RustType) -> String {
         RustType::Enum { ref name, .. } => name
     })
 }
+
+// fn impl_func(t: &RustType) -> String {
+//     match *t {
+//         RustType::Struct { ref name, tl_id, ref args } => {
+//             // Begin Serialize
+//             // End Serialize
+
+//             buf
+//         }
+
+//         RustType::Enum { ref variants, ref name } => { panic!("This should never happen") }
+//     }
+// }
 
 fn impl_ser(t: &RustType) -> String {
     match *t {
