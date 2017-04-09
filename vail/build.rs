@@ -43,17 +43,20 @@ struct TlItem {
 // double is f64
 
 fn main() {
-    let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").unwrap();
+    let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").expect("Error while compiling item regex");
 
-    let out_dir = env::var("OUT_DIR").unwrap();
+    let out_dir = env::var("OUT_DIR").expect("Could not find OUT_DIR environment variable");
     // let out_dir = "./src/";
-    let dest_path = Path::new(&out_dir).join("tl.rs");
-    println!("{:?}", dest_path);
-    let mut tl_output = File::create(&dest_path).unwrap();
-    let mut tl_scheme_file = File::open("./scheme.tl").unwrap();
+    let cons_out_path = Path::new(&out_dir).join("constructors.rs");
+    let func_out_path = Path::new(&out_dir).join("functions.rs");
+
+    let mut cons_out = File::create(&cons_out_path).expect("Could not create constructors file");
+    let mut func_out = File::create(&func_out_path).expect("Could not create functions file");
+
+    let mut tl_scheme_file = File::open("./scheme.tl").expect("Could not open scheme file");
     let mut tl_scheme_contents = String::new();
 
-    let _ = tl_scheme_file.read_to_string(&mut tl_scheme_contents);
+    tl_scheme_file.read_to_string(&mut tl_scheme_contents).expect("Could not read scheme file");
 
     let mut constructors: Vec<TlItem> = Vec::new();
     let mut functions: Vec<TlItem> = Vec::new();
@@ -67,10 +70,10 @@ fn main() {
         }
 
         if let Some(captures) = item_regex.captures(line) {
-            let name = dot_to_camel(captures.name("name").unwrap().as_str());
-            let id = u32::from_str_radix(captures.name("id").unwrap().as_str(), 16).unwrap();
+            let name = dot_to_camel(captures.name("name").expect("Could not get capture `name`").as_str());
+            let id = u32::from_str_radix(captures.name("id").expect("Could not get capture `id`").as_str(), 16).expect("Could not parse tl_id as u32");
             let args = captures.name("args");
-            let item_type = dot_to_camel(captures.name("type").unwrap().as_str());
+            let item_type = dot_to_camel(captures.name("type").expect("Could not get capture `type`").as_str());
 
             let item = TlItem {
                 name: name,
@@ -91,15 +94,16 @@ fn main() {
 
     // println!("{:#?}", type_counts);
 
+    // Write the constructors
     let mut done = Vec::new();
 
     for ref cons in &constructors {
         if *type_counts.get(&cons.item_type).unwrap() == 1 && cons.item_type == cons.name {
             // It's going to be a struct
             
-            let struct_output = write_struct(&cons);
+            let struct_output = write_struct(&cons, false);
             
-            tl_output.write_all(struct_output.as_bytes()).unwrap();
+            cons_out.write_all(struct_output.as_bytes()).unwrap();
         } else {
             // Its going to be an enum
             if done.contains(&&cons.item_type) {
@@ -107,7 +111,7 @@ fn main() {
             }
 
             let enum_output = write_enum(&cons, &constructors);
-            tl_output.write_all(enum_output.as_bytes()).unwrap();
+            cons_out.write_all(enum_output.as_bytes()).unwrap();
 
             done.push(&cons.item_type);
         }
@@ -115,33 +119,69 @@ fn main() {
 
     done.clear();
 
-    let _ = write!(tl_output,
+    // Write the TlType enum
+    write!(cons_out,
        "#[derive(Debug)]\n\
-        enum TlType {{").unwrap();
+        enum TlType {{").expect("Could not write to constructor file");
 
     for ref cons in &constructors {
         if done.contains(&&cons.item_type) {
             continue;
         }
 
-        let _ = write!(tl_output,
+        write!(cons_out,
             "\n    {0}(Box<{0}>),",
-            cons.item_type).unwrap();
+            cons.item_type).expect("Could not write to constructor file");
 
         done.push(&cons.item_type);
     }
 
-    let _ = write!(tl_output,
-        "\n}}").unwrap();
+    write!(cons_out, "\n}}").expect("Could not write to constructor file");
 
-    let _ = tl_output.flush();
+    done.clear();
+
+
+    // Implement Serialize and Deserialize for TlType that just points to the
+    // variant's function
+
+    cons_out.flush().expect("Error while flushing constructor file");
+
+    
+    // Write the functions
+    for ref func in &functions {            
+        let output = write_struct(&func, true);
+        func_out.write_all(output.as_bytes()).unwrap();
+    }
+
+    // Write the TlFunc enum
+    write!(func_out,
+       "#[derive(Debug)]\n\
+        enum TlFunc {{").expect("Could not write to functions file");
+
+    for ref func in &functions {
+        write!(func_out,
+            "\n    {0}(Box<{0}>),",
+            func.name).expect("Could not write to functions file");
+    }
+
+    write!(func_out, "\n}}").expect("Could not write to functions file");
+
+    // Serialize for TlFunc
+    write!(func_out,
+        "\n\nimpl Serialize<TlFunc> for Cursor<Vec<u8>> {{
+            fn serialize(&mut self, func: &TlFunc) -> Result<(), io::Error> {{
+                match *func {{\n").expect("Could not write to functions file");
+
+    for ref func in &functions {
+        write!(func_out,
+            "TlFunc::{0}(ref obj) => <Self as Serialize<{0}>>::serialize(self, &obj)?,\n",
+            func.name).expect("Could not write to functions file");
+    }
+
+    write!(func_out, "}}\nOk(())\n}}}}").expect("Could not write to functions file");
+
+    func_out.flush().expect("Error while flushing functions file");
 }
-
-/*
-fn write_func(tl_func: &TlItem) -> String {
-
-}
-*/
 
 fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
     let mut output = String::new();
@@ -208,17 +248,25 @@ fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
     output
 }
 
-fn write_struct(tl_struct: &TlItem) -> String {
+fn write_struct(tl_struct: &TlItem, func: bool) -> String {
     let mut output = String::new();
     
-    write!(output,
-       "#[derive(Debug, ToTlType, TlSer, TlDes)]\n\
-        #[tl_id = \"{:x}\"]\n\
-        pub struct {}",
-        tl_struct.id as u32, tl_struct.name).unwrap();
+    if func {
+        write!(output,
+           "#[derive(Debug, ToTlFunc, TlSer)]\n\
+            #[tl_id = \"{:x}\"]\n\
+            pub struct {}",
+            tl_struct.id as u32, tl_struct.name).expect("Error writing struct to string");
+    } else {
+        write!(output,
+           "#[derive(Debug, ToTlType, TlSer, TlDes)]\n\
+            #[tl_id = \"{:x}\"]\n\
+            pub struct {}",
+            tl_struct.id as u32, tl_struct.name).expect("Error writing struct to string");
+    }
 
     if let Some(ref args) = tl_struct.args {
-        let _ = write!(output, " {{").unwrap();
+        write!(output, " {{").expect("Error writing struct to string");
 
         for arg in args {
             let arg_type = tl_type_to_rust(&arg.arg_type);
@@ -229,25 +277,25 @@ fn write_struct(tl_struct: &TlItem) -> String {
                          \n    pub {}: Option<{}>,",
                         arg.flag_bit,
                         filter_arg_name(&arg.name),
-                        arg_type).unwrap();
+                        arg_type).expect("Error writing struct to string");
                 } else {
                     write!(output,
                         "\n    #[flag_bit = \"{}\"]\
                          \n    pub {}: {},",
                         arg.flag_bit,
                         filter_arg_name(&arg.name),
-                        arg_type).unwrap();
+                        arg_type).expect("Error writing struct to string");
                 }
             } else {
                 write!(output, "\n    {}: {},",
                     filter_arg_name(&arg.name),
-                    tl_type_to_rust(&arg.arg_type)).unwrap();
+                    tl_type_to_rust(&arg.arg_type)).expect("Error writing struct to string");
             }
         }
 
-        write!(output, "\n}}\n\n").unwrap();
+        write!(output, "\n}}\n\n").expect("Error writing struct to string");
     } else {
-        write!(output, ";\n\n").unwrap();
+        write!(output, ";\n\n").expect("Error writing struct to string");
     }
 
     output
@@ -255,7 +303,7 @@ fn write_struct(tl_struct: &TlItem) -> String {
 
 fn filter_variant(variant: &str, type_name: &str) -> String {
     lazy_static! {
-        static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z0-9]*").unwrap();
+        static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z0-9]*").expect("Error compiling variant filter regex");
     }
 
     let var_matches = WORD_RE.find_iter(variant)
@@ -331,7 +379,8 @@ fn tl_type_to_rust(s: &str) -> String {
         "#"      => "u32",
         "True" |
         "Bool"   => "bool",
-        "String" => "String",
+        "Vector<string>" => "Vec<String>",
+        "string" => "String",
         "Int"  |
         "int"    => "i32",
         "Vector<Int>" |
@@ -358,7 +407,7 @@ fn tl_type_to_rust(s: &str) -> String {
 
 fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
     lazy_static! {
-        static ref ARG_RE: Regex = Regex::new(r"(?P<name>\w+):(?:flags\.(?P<flag_bit>\d+)\?)?(?P<type>[\w<.>#]+) ?").unwrap();
+        static ref ARG_RE: Regex = Regex::new(r"(?P<name>[{\w]+):(?:flags\.(?P<flag_bit>\d+)\?)?(?P<type>[\w<.>#!]+)").expect("Error compiling parse args regex");
     }
     match capture {
         Some(cap) => {
@@ -369,12 +418,17 @@ fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
                     // This arg was something like {X:Type} which we take into account already
                     continue;
                 }
+
                 if let Some(capture) = ARG_RE.captures(piece) {
-                    let name = capture.name("name").unwrap().as_str().to_string();
-                    let arg_type = dot_to_camel(capture.name("type").unwrap().as_str());
+                    let name = capture.name("name").expect("Error getting `name` capture").as_str().to_string();
+                    let mut arg_type = dot_to_camel(capture.name("type").expect("Error getting `type` capture").as_str());
+                    
+                    if arg_type == "!X" {
+                        arg_type = String::from("TlFunc")
+                    }
 
                     let flag_bit = if let Some(bit) = capture.name("flag_bit") {
-                        bit.as_str().parse::<i64>().unwrap()
+                        bit.as_str().parse::<i64>().expect("Error parsing bit_flag into an int")
                     } else {
                         -1
                     };

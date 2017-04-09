@@ -7,7 +7,8 @@ use std::io;
 use std::net::TcpStream;
 
 
-mod tl;
+mod constructors;
+mod functions;
 mod serialize;
 mod deserialize;
 
