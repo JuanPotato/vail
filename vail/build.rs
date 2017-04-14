@@ -168,17 +168,17 @@ fn main() {
 
     // Serialize for TlFunc
     write!(func_out,
-        "\n\nimpl Serialize<TlFunc> for Cursor<Vec<u8>> {{
-            fn serialize(&mut self, func: &TlFunc) -> Result<(), io::Error> {{
+        "\n\nimpl Serialize<TlFunc> for Cursor<Vec<u8>> {{\n    \
+            fn serialize(&mut self, func: &TlFunc) -> Result<(), io::Error> {{\n        \
                 match *func {{\n").expect("Could not write to functions file");
 
     for ref func in &functions {
-        write!(func_out,
-            "TlFunc::{0}(ref obj) => <Self as Serialize<{0}>>::serialize(self, &obj)?,\n",
+        write!(func_out,"            \
+            TlFunc::{0}(ref obj) => <Self as Serialize<{0}>>::serialize(self, &obj)?,\n",
             func.name).expect("Could not write to functions file");
     }
 
-    write!(func_out, "}}\nOk(())\n}}}}").expect("Could not write to functions file");
+    write!(func_out, "        }}\n\n        Ok(())\n    }}\n}}").expect("Could not write to functions file");
 
     func_out.flush().expect("Error while flushing functions file");
 }

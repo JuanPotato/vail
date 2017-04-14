@@ -174,6 +174,18 @@ pub fn to_tltype(input: TokenStream) -> TokenStream {
     gen.parse().unwrap()
 }
 
+#[proc_macro_derive(ToTlFunc)]
+pub fn to_tlfunc(input: TokenStream) -> TokenStream {
+    let s = input.to_string();
+
+    let ast = syn::parse_macro_input(&s).unwrap();
+    let simp = RustType::from(ast);
+
+    let gen = impl_to_tlfunc(&simp);
+
+    gen.parse().unwrap()
+}
+
 #[proc_macro_derive(TlSer, attributes(tl_id, flag_bit))]
 pub fn tl_ser(input: TokenStream) -> TokenStream {
     let s = input.to_string();
@@ -199,7 +211,7 @@ pub fn tl_des(input: TokenStream) -> TokenStream {
 }
 
 // For functions we need to provide a set of builder functions.
-//
+// ^ will be using derive_builder 0.4
 //
 // ```
 // let a = GetMessages::new().something("yeah").build();
@@ -207,34 +219,6 @@ pub fn tl_des(input: TokenStream) -> TokenStream {
 // ```
 // fn send<T>(obj: &T) where T can Serialize
 //
-// or 
-//
-// ```
-// let a = GetMessages::new().something("yeah");
-// mtproto.send(a)
-// ```
-// fn send<T>(obj: &T) where T can IntoSerialize
-//
-//
-// or
-//
-// ```
-// GetMessages::new().something("yeah").send(mtproto);
-// ```
-// trait TlFunction { fn send(mtp: &Mtproto) -> Result<(), Error> }
-//
-
-// #[proc_macro_derive(TlFunc, attributes(return_type))]
-// pub fn tl_func(input: TokenStream) -> TokenStream {
-//     let s = input.to_string();
-
-//     let ast = syn::parse_macro_input(&s).unwrap();
-//     let simp = RustType::from(ast);
-
-//     let gen = impl_func(&simp);
-
-//     gen.parse().unwrap()
-// }
 
 fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
     let mut val = String::new();
@@ -257,6 +241,19 @@ fn impl_to_tltype(t: &RustType) -> String {
         "impl From<{name}> for TlType {{\n    \
             fn from(x: {name}) -> TlType {{\n        \
                 TlType::{name}(x.into())\n    \
+            }}\n\
+        }}\n",
+    name = match *t {
+        RustType::Struct { ref name, .. } => name,
+        RustType::Enum { ref name, .. } => name
+    })
+}
+
+fn impl_to_tlfunc(t: &RustType) -> String {
+    format!(
+        "impl From<{name}> for TlFunc {{\n    \
+            fn from(x: {name}) -> TlFunc {{\n        \
+                TlFunc::{name}(x.into())\n    \
             }}\n\
         }}\n",
     name = match *t {
