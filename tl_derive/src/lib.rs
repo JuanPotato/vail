@@ -292,10 +292,10 @@ fn impl_ser(t: &RustType) -> String {
                     for arg in args {
                         if arg.flag < 0 {
                             write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag.abs()).unwrap();
+                                name = arg.name, flag = arg.flag.abs() - 1).unwrap();
                         } else if arg.flag > 0 {
                             write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag).unwrap();
+                                name = arg.name, flag = arg.flag - 1).unwrap();
                         }
                     }
 
@@ -357,10 +357,10 @@ fn impl_ser(t: &RustType) -> String {
                         for arg in &variant.args {
                             if arg.flag < 0 {
                                 write!(buf, " | if {name} {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag.abs()).unwrap();
+                                    name = arg.name, flag = arg.flag.abs() - 1).unwrap();
                             } else if arg.flag > 0 {
                                 write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag).unwrap();
+                                    name = arg.name, flag = arg.flag- 1).unwrap();
                             }
                         }
 
@@ -423,11 +423,11 @@ fn impl_des(t: &RustType) -> String {
                                }} else {{\n            \
                                    None\n            \
                                }};\n",
-                      type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
+                      type_ = fil_type, name = arg.name, flag = arg.flag - 1, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
                 } else if arg.flag < 0 {
                     write!(buf,
                         "        let {name} = flags & (1 << {flag}) != 0;\n",
-                        name = arg.name, flag = arg.flag.abs()).unwrap();
+                        name = arg.name, flag = arg.flag.abs() - 1).unwrap();
                 } else {
                     write!(buf,
                         "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
@@ -479,11 +479,11 @@ fn impl_des(t: &RustType) -> String {
                                    }} else {{\n            \
                                        None\n            \
                                    }};\n",
-                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
+                          type_ = fil_type, name = arg.name, flag = arg.flag - 1, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
                     } else if arg.flag < 0 {
                         write!(buf,
                             "        let {name} = flags & (1 << {flag}) != 0;\n",
-                            name = arg.name, flag = arg.flag.abs()).unwrap();
+                            name = arg.name, flag = arg.flag.abs() - 1).unwrap();
                     } else {
                         write!(buf,
                             "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
