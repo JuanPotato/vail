@@ -3,9 +3,10 @@ extern crate tl_derive;
 extern crate byteorder;
 
 use std::io;
+use std::io::Cursor;
 
 use std::net::TcpStream;
-
+use deserialize::Deserializer;
 
 mod constructors;
 mod functions;
@@ -28,7 +29,7 @@ fn test() {
     use std::fmt::Write;
 
     let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-    let start = tl::User::User {
+    let start = constructors::User::User {
         flags: 0, // flags is generated on serialize
         sself: true,
         contact: false,
@@ -47,7 +48,7 @@ fn test() {
         last_name: Some("Potato".to_string()),
         username: None,
         phone: None,
-        photo: Some(tl::UserProfilePhoto::Empty.into()),
+        photo: Some(constructors::UserProfilePhoto::Empty.into()),
         status: None,
         bot_info_version: None,
         restriction_reason: None,
@@ -96,7 +97,7 @@ fn test() {
     write!(s, "\n");
 
     buf.set_position(0);
-    let end: tl::User = buf.deserialize().unwrap();
+    let end: constructors::User = buf.deserialize().unwrap();
 
     println!("{:#?}", start);
 

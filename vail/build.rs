@@ -394,8 +394,8 @@ fn tl_type_to_rust(s: &str) -> String {
         "#"      => "u32",
         "True" | "bool" |
         "Bool"   => s,
-        "Vector<string>" => "Vec<String>",
-        "string" => "String",
+        "Vector<string>" | "Vector<String>" => "Vec<String>",
+        "string"| "String" => "String",
         "Int"  |
         "int"    => "i32",
         "Vector<Int>" |
