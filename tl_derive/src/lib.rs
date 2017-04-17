@@ -67,7 +67,7 @@ impl<'a> From<&'a syn::Field> for RustField {
             type_: type_,
             flag: flag_bit
                 .parse::<i64>()
-                .unwrap_or(-1),
+                .unwrap_or(0),
         }
     }
 }
@@ -290,12 +290,11 @@ fn impl_ser(t: &RustType) -> String {
                     buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
 
                     for arg in args {
-                        if arg.flag == -1 { continue; }
-                        if arg.type_ != "bool" {
-                            write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag).unwrap();
-                        } else {
+                        if arg.flag < 0 {
                             write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
+                                name = arg.name, flag = arg.flag.abs()).unwrap();
+                        } else if arg.flag > 0 {
+                            write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
                                 name = arg.name, flag = arg.flag).unwrap();
                         }
                     }
@@ -304,17 +303,13 @@ fn impl_ser(t: &RustType) -> String {
                     continue;
                 }
 
-                if arg.flag != -1 {
-                    if arg.type_ != "bool" {
-                        write!(buf,
-                            "        if let Some(ref opt) = obj.{name} {{\n            \
-                                         <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
-                                     }}\n",
-                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
-                    }
-                    // if it is a boolean type, it isnt going to be serialized
-                    // it just depends on the flags
-                } else {
+                if arg.flag > 0 {
+                    write!(buf,
+                        "        if let Some(ref opt) = obj.{name} {{\n            \
+                                     <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
+                                 }}\n",
+                        type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
+                } else if arg.flag == 0 {
                     write!(buf,
                         "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;\n",
                         type_ = arg.type_, name = arg.name).unwrap();
@@ -323,7 +318,6 @@ fn impl_ser(t: &RustType) -> String {
 
             buf.push_str("Ok(())    }\n}\n\n");
             // End Serialize
-
 
             buf
         }
@@ -361,12 +355,11 @@ fn impl_ser(t: &RustType) -> String {
                         buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
 
                         for arg in &variant.args {
-                            if arg.flag == -1 { continue; }
-                            if arg.type_ != "bool" {
-                                write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag).unwrap();
-                            } else {
+                            if arg.flag < 0 {
                                 write!(buf, " | if {name} {{ 1 }} else {{ 0 }} << {flag}",
+                                    name = arg.name, flag = arg.flag.abs()).unwrap();
+                            } else if arg.flag > 0 {
+                                write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
                                     name = arg.name, flag = arg.flag).unwrap();
                             }
                         }
@@ -375,15 +368,13 @@ fn impl_ser(t: &RustType) -> String {
                         continue;
                     }
 
-                    if arg.flag != -1 {
-                        if arg.type_ != "bool" {
-                            write!(buf,
-                                "        if let &Some(ref opt) = {name} {{\n            \
-                                             <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
-                                         }}\n",
-                                type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
-                        }
-                    } else {
+                    if arg.flag > 0 {
+                        write!(buf,
+                            "        if let &Some(ref opt) = {name} {{\n            \
+                                         <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
+                                     }}\n",
+                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
+                    } else if arg.flag == 0 {
                         write!(buf,
                             "        <Self as Serialize<{type_}>>::serialize(self, &{name})?;\n",
                             type_ = arg.type_, name = arg.name).unwrap();
@@ -425,20 +416,18 @@ fn impl_des(t: &RustType) -> String {
                     is_box = true;
                 }
                     
-                if arg.flag != -1 {
-                    if arg.type_ != "bool" {
-                        write!(buf,
-                          "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                       Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
-                                   }} else {{\n            \
-                                       None\n            \
-                                   }};\n",
-                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
-                    } else {
-                        write!(buf,
-                            "        let {name} = flags & (1 << {flag}) != 0;\n",
-                            name = arg.name, flag = arg.flag).unwrap();
-                    }
+                if arg.flag > 0 {
+                    write!(buf,
+                      "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
+                                   Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                               }} else {{\n            \
+                                   None\n            \
+                               }};\n",
+                      type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
+                } else if arg.flag < 0 {
+                    write!(buf,
+                        "        let {name} = flags & (1 << {flag}) != 0;\n",
+                        name = arg.name, flag = arg.flag.abs()).unwrap();
                 } else {
                     write!(buf,
                         "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
@@ -483,21 +472,18 @@ fn impl_des(t: &RustType) -> String {
                         is_box = true;
                     }
                     
-                    if arg.flag != -1 {
-                        if arg.type_ != "bool" {
-                            write!(buf,
-                              "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                           Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
-                                       }} else {{\n            \
-                                           None\n            \
-                                       }};\n",
-                              type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
-
-                        } else {
-                            write!(buf,
-                                "        let {name} = flags & (1 << {flag}) != 0;\n",
-                                name = arg.name, flag = arg.flag).unwrap();
-                        }
+                    if arg.flag > 0 {
+                        write!(buf,
+                          "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
+                                       Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                                   }} else {{\n            \
+                                       None\n            \
+                                   }};\n",
+                          type_ = fil_type, name = arg.name, flag = arg.flag, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
+                    } else if arg.flag < 0 {
+                        write!(buf,
+                            "        let {name} = flags & (1 << {flag}) != 0;\n",
+                            name = arg.name, flag = arg.flag.abs()).unwrap();
                     } else {
                         write!(buf,
                             "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",

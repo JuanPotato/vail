@@ -42,6 +42,24 @@ struct TlItem {
 // float is f32
 // double is f64
 
+// Ok im sorry, I had to somehow make a distinction between a flag bit that was
+// for a bool that you had to read, (Bool) or a bool that was determined by the
+// bit itself, if 1 then true (True). So my solution was to make all the normal
+// bit flags to be one more than what they were. 0 -> 1, etc. But the exception
+// being the (True) bool would be a negative bit flag to indicate that it is to
+// be treated differently than a bool with a positive bit flag. Since -1 cannot
+// be used to represent being mandatory, 0 is used instead. Yeah, its not great
+
+// Any awkward wording above is because i tried to make all lines only 80 chars
+
+/*
+When you write a really long comment and make it your goal to make each line be
+exactly 80 characters including the note afterwards pointing out that any weird
+wording in the comment was due to you trying to make each line be 80 characters
+
+Oh no, someone help me I have gone too meta and I need help to escape. pls help 
+*/
+
 fn main() {
     let item_regex = Regex::new(r"^(?P<name>[\w\.]+)#(?P<id>[0-9a-f]+) (?P<args>[\w <>:#?.{}!]*)= (?P<type>[\w<.>]+);").expect("Error while compiling item regex");
 
@@ -214,22 +232,20 @@ fn write_enum(tl_enum: &TlItem, constructors: &[TlItem]) -> String {
                     arg_type = format!("Box<{}>", arg_type);
                 }
 
-                if arg.flag_bit != -1 {
-                    if arg_type != "bool" {
-                        write!(output,
-                            "\n        #[flag_bit = \"{}\"]\
-                             \n        {}: Option<{}>,",
-                            arg.flag_bit,
-                            arg_name,
-                            arg_type).unwrap();
-                    } else {
-                        write!(output,
-                            "\n        #[flag_bit = \"{}\"]\
-                             \n        {}: {},",
-                            arg.flag_bit,
-                            arg_name,
-                            arg_type).unwrap();
-                    }
+                if arg.flag_bit < 0 {
+                    write!(output,
+                        "\n        #[flag_bit = \"{}\"]\
+                         \n        {}: {},",
+                        arg.flag_bit,
+                        arg_name,
+                        arg_type).unwrap();
+                } else if arg.flag_bit > 0 {
+                    write!(output,
+                        "\n        #[flag_bit = \"{}\"]\
+                         \n        {}: Option<{}>,",
+                        arg.flag_bit,
+                        arg_name,
+                        arg_type).unwrap();
                 } else {
                     write!(output, "\n        {}: {},",
                         arg_name,
@@ -270,22 +286,21 @@ fn write_struct(tl_struct: &TlItem, func: bool) -> String {
 
         for arg in args {
             let arg_type = tl_type_to_rust(&arg.arg_type);
-            if arg.flag_bit != -1 {
-                if arg_type != "bool" {
-                    write!(output,
-                        "\n    #[flag_bit = \"{}\"]\
-                         \n    pub {}: Option<{}>,",
-                        arg.flag_bit,
-                        filter_arg_name(&arg.name),
-                        arg_type).expect("Error writing struct to string");
-                } else {
-                    write!(output,
-                        "\n    #[flag_bit = \"{}\"]\
-                         \n    pub {}: {},",
-                        arg.flag_bit,
-                        filter_arg_name(&arg.name),
-                        arg_type).expect("Error writing struct to string");
-                }
+
+            if arg.flag_bit < 0 {
+                write!(output,
+                    "\n    #[flag_bit = \"{}\"]\
+                     \n    {}: {},",
+                    arg.flag_bit,
+                    filter_arg_name(&arg.name),
+                    arg_type).expect("Error writing struct to string");
+            } else if arg.flag_bit > 0 {
+                write!(output,
+                    "\n    #[flag_bit = \"{}\"]\
+                     \n    {}: Option<{}>,",
+                    arg.flag_bit,
+                    filter_arg_name(&arg.name),
+                    arg_type).expect("Error writing struct to string");
             } else {
                 write!(output, "\n    {}: {},",
                     filter_arg_name(&arg.name),
@@ -377,8 +392,8 @@ fn tl_type_to_rust(s: &str) -> String {
 
     let new_s = match s {
         "#"      => "u32",
-        "True" |
-        "Bool"   => "bool",
+        "True" | "bool" |
+        "Bool"   => s,
         "Vector<string>" => "Vec<String>",
         "string" => "String",
         "Int"  |
@@ -427,11 +442,16 @@ fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
                         arg_type = String::from("TlFunc")
                     }
 
-                    let flag_bit = if let Some(bit) = capture.name("flag_bit") {
-                        bit.as_str().parse::<i64>().expect("Error parsing bit_flag into an int")
+                    let mut flag_bit = if let Some(bit) = capture.name("flag_bit") {
+                        bit.as_str().parse::<i64>().expect("Error parsing bit_flag into an int") + 1
                     } else {
-                        -1
+                        0
                     };
+
+                    if arg_type == "True" {
+                        flag_bit *= -1;
+                        arg_type = String::from("bool");
+                    }
 
                     args.push(Arg {
                         name: name,
