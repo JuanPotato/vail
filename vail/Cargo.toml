@@ -11,6 +11,7 @@ regex = "0.2"
 [dependencies]
 byteorder = "1.0.0"
 openssl = "0.9.8"
+time = "0.1"
 
 [dependencies.tl_derive]
 path = "../tl_derive"

@@ -82,16 +82,30 @@ fn main() {
 
     let mut is_function = false;
     for line in tl_scheme_contents.lines() {
-        if line == "---functions---" {
-            is_function = true;
-            continue;
+        match line {
+            "---functions---" => {
+                is_function = true;
+                continue;
+            }
+
+            "---types---" => {
+                is_function = false;
+                continue;
+            }
+
+            _ => {}
         }
 
         if let Some(captures) = item_regex.captures(line) {
-            let name = dot_to_camel(captures.name("name").expect("Could not get capture `name`").as_str());
+            let mut name = dot_to_camel(captures.name("name").expect("Could not get capture `name`").as_str());
+            name = snake_to_camel(name.as_str());
+
             let id = u32::from_str_radix(captures.name("id").expect("Could not get capture `id`").as_str(), 16).expect("Could not parse tl_id as u32");
             let args = captures.name("args");
-            let item_type = dot_to_camel(captures.name("type").expect("Could not get capture `type`").as_str());
+
+            let mut item_type = dot_to_camel(captures.name("type").expect("Could not get capture `type`").as_str());
+            item_type = snake_to_camel(item_type.as_str());
+
 
             let item = TlItem {
                 name: name,
@@ -317,6 +331,10 @@ fn write_struct(tl_struct: &TlItem, func: bool) -> String {
 }
 
 fn filter_variant(variant: &str, type_name: &str) -> String {
+    // if type_name == "DestroySessionRes" || variant == "DestroySessionRes" {
+        println!("{:?} -- {:?}", variant, type_name);
+    // }
+
     lazy_static! {
         static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z0-9]*").expect("Error compiling variant filter regex");
     }
@@ -481,4 +499,8 @@ fn upper_first(s: &str) -> String {
 
 fn dot_to_camel(s: &str) -> String {
     s.split('.').map(|a| upper_first(a)).collect::<String>()
+}
+
+fn snake_to_camel(s: &str) -> String {
+    s.split('_').map(|a| upper_first(a)).collect::<String>()
 }

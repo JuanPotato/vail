@@ -1,17 +1,28 @@
 #[macro_use]
 extern crate tl_derive;
 extern crate byteorder;
+extern crate time;
 
 use std::io;
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
-use std::net::TcpStream;
+use std::net::{TcpStream, ToSocketAddrs};
 use deserialize::Deserializer;
+
+use byteorder::LittleEndian;
+use byteorder::WriteBytesExt;
+
 
 mod constructors;
 mod functions;
 mod serialize;
 mod deserialize;
+
+
+// PROD_SERVER = "149.154.167.50:443";
+// TEST_SERVER = "149.154.167.40:443";
+
+
 
 #[derive(Debug)]
 enum TlErrors {
@@ -20,11 +31,69 @@ enum TlErrors {
 
 #[derive(Debug)]
 pub struct MtProtoConnection {
-    conn: TcpStream
+    conn: TcpStream,
+    connected: bool,
+    encrypted: bool,
+    msg_ig_offset: i64,
 }
 
+impl MtProtoConnection {
+    fn new(encrypted: bool) -> Result<MtProtoConnection, io::Error> {
+        let connection = TcpStream::connect("149.154.167.50:443")?;
+
+        Ok(MtProtoConnection {
+            conn: connection,
+            connected: false,
+            encrypted: encrypted,
+            msg_ig_offset: 0,
+        })
+    }
+
+    fn new_custom<A: ToSocketAddrs>(encrypted: bool, addr: A) -> Result<MtProtoConnection, io::Error> {
+        let connection = TcpStream::connect(addr)?;
+
+        Ok(MtProtoConnection {
+            conn: connection,
+            connected: false,
+            encrypted: encrypted,
+            msg_ig_offset: 0,
+        })
+    }
+
+    fn set_encrypt(&mut self, encrypted: bool) {
+        self.encrypted = encrypted;
+    }
+
+    fn send(&mut self, message_data: &[u8]) -> Result<(), io::Error> {
+        if self.encrypted {
+            unimplemented!();
+        } else {
+            let msg_id = self.get_msg_id();
+
+            self.conn.write_i64::<LittleEndian>(0)?; // auth_key_id = 0; int64
+            self.conn.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
+            self.conn.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
+            self.conn.write_all(message_data)?; // message_data; bytes
+        }
+    }
+
+    fn get_msg_id(&self) -> i64 {
+        let current_time = time::get_time();
+
+        return current_time.sec << 32 | (current_time.nsec as i64) << 2;
+    }
+}
+
+// #[test]
+// fn authenticate() {
+//     use ::serialize::Serialize;
+    
+//     let connection = MtProtoConnection::new(false).unwrap();
+//     connection.send(functions::Res);
+// }
+
 #[test]
-fn test() {
+fn test_ser_des() {
     use::serialize::Serialize;
     use std::fmt::Write;
 
