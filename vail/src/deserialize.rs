@@ -3,6 +3,8 @@ use std::io;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
+use {Int128, Int256};
+
 pub trait Deserialize<D> {
     fn _deserialize(&mut self) -> Result<D, io::Error>; // I need a more elegant solution
 }
@@ -50,6 +52,26 @@ impl Deserialize<i64> for Cursor<Vec<u8>> {
 impl Deserialize<f64> for Cursor<Vec<u8>> {
     fn _deserialize(&mut self) -> Result<f64, io::Error> {
         Ok(self.read_f64::<LittleEndian>()?)
+    }
+}
+
+impl Deserialize<Int128> for Cursor<Vec<u8>> {
+    fn _deserialize(&mut self) -> Result<Int128, io::Error> {
+        let part1 = self.read_u64::<LittleEndian>()?;
+        let part2 = self.read_u64::<LittleEndian>()?;
+
+        Ok((part2, part1))
+    }
+}
+
+impl Deserialize<Int256> for Cursor<Vec<u8>> {
+    fn _deserialize(&mut self) -> Result<Int256, io::Error> {
+        let part1 = self.read_u64::<LittleEndian>()?;
+        let part2 = self.read_u64::<LittleEndian>()?;
+        let part3 = self.read_u64::<LittleEndian>()?;
+        let part4 = self.read_u64::<LittleEndian>()?;
+
+        Ok((part4, part3, part2, part1))
     }
 }
 

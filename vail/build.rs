@@ -331,10 +331,6 @@ fn write_struct(tl_struct: &TlItem, func: bool) -> String {
 }
 
 fn filter_variant(variant: &str, type_name: &str) -> String {
-    // if type_name == "DestroySessionRes" || variant == "DestroySessionRes" {
-        println!("{:?} -- {:?}", variant, type_name);
-    // }
-
     lazy_static! {
         static ref WORD_RE: Regex = Regex::new(r"[A-Z]+[a-z0-9]*").expect("Error compiling variant filter regex");
     }
@@ -416,6 +412,7 @@ fn tl_type_to_rust(s: &str) -> String {
         "string"| "String" => "String",
         "Int"  |
         "int"    => "i32",
+        "Int128" | "Int256" => s,
         "Vector<Int>" |
         "Vector<int>" => "Vec<i32>",
         "Long" |
@@ -455,7 +452,9 @@ fn parse_args(capture: Option<regex::Match>) -> Option<Vec<Arg>> {
                 if let Some(capture) = ARG_RE.captures(piece) {
                     let name = capture.name("name").expect("Error getting `name` capture").as_str().to_string();
                     let mut arg_type = dot_to_camel(capture.name("type").expect("Error getting `type` capture").as_str());
-                    
+                    arg_type = snake_to_camel(arg_type.as_str());
+
+
                     if arg_type == "!X" {
                         arg_type = String::from("TlFunc")
                     }
@@ -502,5 +501,7 @@ fn dot_to_camel(s: &str) -> String {
 }
 
 fn snake_to_camel(s: &str) -> String {
-    s.split('_').map(|a| upper_first(a)).collect::<String>()
+    let string = s.split('_').map(|a| upper_first(a)).collect::<String>();
+
+    string.split('<').map(|a| upper_first(a)).collect::<Vec<String>>().join("<")
 }

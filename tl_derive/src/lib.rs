@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate quote;
 extern crate proc_macro;
 extern crate syn;
@@ -262,28 +261,23 @@ fn impl_to_tlfunc(t: &RustType) -> String {
     })
 }
 
-// fn impl_func(t: &RustType) -> String {
-//     match *t {
-//         RustType::Struct { ref name, tl_id, ref args } => {
-//             // Begin Serialize
-//             // End Serialize
-
-//             buf
-//         }
-
-//         RustType::Enum { ref variants, ref name } => { panic!("This should never happen") }
-//     }
-// }
-
 fn impl_ser(t: &RustType) -> String {
     match *t {
         RustType::Struct { ref name, tl_id, ref args } => {
             // Begin Serialize
-            let mut buf = format!(
+            let mut buf = if args.len() > 0 {
+                format!(
                 "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
                         <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
-                        name = name, tl_id = tl_id);
+                        name = name, tl_id = tl_id)
+            } else {
+                format!(
+                "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
+                    fn serialize(&mut self, _: &{name}) -> Result<(), io::Error> {{\n        \
+                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
+                        name = name, tl_id = tl_id)
+            };
 
             for arg in args {
                 if arg.name == "flags" {
@@ -299,7 +293,7 @@ fn impl_ser(t: &RustType) -> String {
                         }
                     }
 
-                    buf.push_str(" as u32));");
+                    buf.push_str(" as u32))?;");
                     continue;
                 }
 
@@ -335,15 +329,25 @@ fn impl_ser(t: &RustType) -> String {
                 if variant.args.len() > 0 {
                     buf.push_str(" {");
 
+                    let mut add_dotdot = false;
+
                     for arg in &variant.args {
                         if arg.type_ != "bool" {
-                            write!(buf, " ref {}, ", arg.name).unwrap();
+                            if arg.name == "flags" {
+                                add_dotdot = true;
+                            } else {
+                                write!(buf, " ref {}, ", arg.name).unwrap();
+                            }
                         } else {
                             write!(buf, " {}, ", arg.name).unwrap();
                         }
                     }
 
-                    buf.push_str("} ");
+                    if add_dotdot {
+                        buf.push_str(".. } ");
+                    } else {   
+                        buf.push_str("} ");
+                    }
                 }
 
                 write!(buf, " => {{\n
@@ -400,7 +404,10 @@ fn impl_des(t: &RustType) -> String {
             let mut buf = format!(
                 "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
                     fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
-                        let is_tl_id = self.deserialize::<u32>()? == {tl_id};\n",
+                        let received_tl_id = self.deserialize::<u32>()?;\n
+                        if received_tl_id != {tl_id} {{
+                            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!(\"Incorrect tl_id for {name}. Expected {tl_id}, received {{}}\", received_tl_id) ));
+                        }}\n",
                         name = name, tl_id = tl_id);
 
             for arg in args {
@@ -502,6 +509,7 @@ fn impl_des(t: &RustType) -> String {
             }
             
             buf.push_str("_ => {Err(io::Error::new(io::ErrorKind::NotFound, \"You gave me an id for a Type, that id was not for that type. Oh no\"))}");
+            // write!(buf, "_ => {{Err(io::Error::new(io::ErrorKind::InvalidInput, format!(\"No variant of {name} found with tl_id of {{}}\", tl_id) ))}}", name = name);
 
             buf.push_str("        }\n    }\n}\n");
             // End Deserialize

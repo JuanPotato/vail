@@ -3,6 +3,8 @@ use std::io;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
+use {Int128, Int256};
+
 pub trait Serialize<S> {
     fn serialize(&mut self, obj: &S) -> Result<(), io::Error>;
 }
@@ -52,6 +54,26 @@ impl Serialize<i64> for Cursor<Vec<u8>> {
 impl Serialize<f64> for Cursor<Vec<u8>> {
     fn serialize(&mut self, obj: &f64) -> Result<(), io::Error> {
         self.write_f64::<LittleEndian>(*obj)?;
+        
+        Ok(())
+    }
+}
+
+impl Serialize<Int128> for Cursor<Vec<u8>> {
+    fn serialize(&mut self, obj: &Int128) -> Result<(), io::Error> {
+        self.write_u64::<LittleEndian>(obj.1)?;
+        self.write_u64::<LittleEndian>(obj.0)?;
+        
+        Ok(())
+    }
+}
+
+impl Serialize<Int256> for Cursor<Vec<u8>> {
+    fn serialize(&mut self, obj: &Int256) -> Result<(), io::Error> {
+        self.write_u64::<LittleEndian>(obj.3)?;
+        self.write_u64::<LittleEndian>(obj.2)?;
+        self.write_u64::<LittleEndian>(obj.1)?;
+        self.write_u64::<LittleEndian>(obj.0)?;
         
         Ok(())
     }
