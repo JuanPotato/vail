@@ -3,6 +3,10 @@ extern crate tl_derive;
 extern crate byteorder;
 extern crate time;
 extern crate rand;
+extern crate crc;
+
+
+use crc::{crc32, Hasher32};
 
 use std::io;
 use std::io::{Write, Read};
@@ -37,6 +41,7 @@ pub struct MtProtoConnection {
     connected: bool,
     encrypted: bool,
     msg_ig_offset: i64,
+    seq_num: i32,
 }
 
 fn dump_bytes(buf: &[u8]) -> String {
@@ -86,13 +91,14 @@ fn dump_bytes(buf: &[u8]) -> String {
 
 impl MtProtoConnection {
     fn new(encrypted: bool) -> Result<MtProtoConnection, io::Error> {
-        let connection = TcpStream::connect("149.154.167.40:443")?;
+        let connection = TcpStream::connect("91.108.56.165:443")?;
 
         Ok(MtProtoConnection {
             conn: connection,
             connected: false,
             encrypted: encrypted,
             msg_ig_offset: 0,
+            seq_num: 0,
         })
     }
 
@@ -104,6 +110,7 @@ impl MtProtoConnection {
             connected: false,
             encrypted: encrypted,
             msg_ig_offset: 0,
+            seq_num: 0,
         })
     }
 
@@ -115,38 +122,45 @@ impl MtProtoConnection {
         if self.encrypted {
             unimplemented!();
         } else {
+            let mut buffer = Cursor::new(Vec::new());
+
+            buffer.write_i32::<LittleEndian>((4 + 4 + (8 + 8 + 4 + message_data.len()) + 4) as i32)?;
+            // length of everything. length, seq_num, auth_key_id, message_id,
+            // message_data_length, message_data, crc32
+            buffer.write_i32::<LittleEndian>(self.seq_num)?;
+
             let msg_id = self.get_msg_id();
 
-            let mut buf = Cursor::new(vec![0; 20 + message_data.len()]);
+            buffer.write_i64::<LittleEndian>(0)?; // auth_key_id = 0; int64
+            buffer.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
+            buffer.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
+            buffer.write_all(message_data)?; // message_data; bytes
+            
+            let mut digest = crc32::Digest::new(crc32::IEEE);
+            digest.write(buffer.get_ref());
+            
+            buffer.write_u32::<LittleEndian>(digest.sum32())?;
 
-            buf.write_i64::<LittleEndian>(0)?; // auth_key_id = 0; int64
-            buf.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
-            buf.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
-            buf.write_all(message_data)?; // message_data; bytes
-
-            self.conn.write_all(buf.get_ref())?;
-
-            self.conn.flush();
+            self.conn.write_all(buffer.get_ref())?;
         }
 
+        self.conn.flush();
         Ok(())
     }
 
-    fn read(&mut self) -> Result<Vec<u8>, io::Error> {
+    fn receive(&mut self) -> Result<Vec<u8>, io::Error> {
         if self.encrypted {
             unimplemented!();
         } else {
-            let auth_key_id = self.conn.read_i64::<LittleEndian>()?;
-            let message_id = self.conn.read_i64::<LittleEndian>()?;
-            let message_data_length = self.conn.read_i32::<LittleEndian>()?;
-            
-            println!("{:?}", message_data_length);
-            println!("{:?}", message_data_length as usize);
+            let buf_size = self.conn.read_i32::<LittleEndian>()?;
+            let seq_num = self.conn.read_i32::<LittleEndian>()?;
 
-            let mut message_data = vec![0; message_data_length as usize];
-            self.conn.read(&mut message_data)?;
+            let mut buffer = vec![0; buf_size as usize - 12];
+            self.conn.read_exact(buffer.as_mut_slice())?;
 
-            Ok(message_data)
+            let checksum = self.conn.read_u32::<LittleEndian>()?;
+
+            Ok(buffer)
         }
     }
 
@@ -156,6 +170,7 @@ impl MtProtoConnection {
         return current_time.sec << 32 | (current_time.nsec as i64) << 2;
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -193,7 +208,7 @@ mod tests {
 
         connection.send(buf.get_ref());
 
-        let mut buffer = connection.read().unwrap();
+        let mut buffer = connection.receive().unwrap();
 
         // let auth_key_id = connection.conn.read_i64::<LittleEndian>().unwrap();
         // let message_id = connection.conn.read_i64::<LittleEndian>().unwrap();
