@@ -5,13 +5,13 @@ extern crate time;
 extern crate rand;
 
 use std::io;
-use std::io::Write;
+use std::io::{Write, Read};
+use std::io::Cursor;
 
 use std::net::{TcpStream, ToSocketAddrs};
 // use deserialize::Deserializer;
 
-use byteorder::LittleEndian;
-use byteorder::WriteBytesExt;
+use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian};
 
 
 mod constructors;
@@ -39,9 +39,54 @@ pub struct MtProtoConnection {
     msg_ig_offset: i64,
 }
 
+fn dump_bytes(buf: &[u8]) -> String {
+    use std::fmt::Write;
+
+    let mut s: String = String::new();
+
+    for (i, bytes) in buf.chunks(16).enumerate() { // hexdump -C
+        write!(s, "\n{:08x}  ", i * 16);
+
+        for (i, b) in bytes.iter().enumerate() {
+            if i == 8 {
+                write!(s, " ");
+            }
+            write!(s, "{:02x} ", b);
+        }
+
+        if bytes.len() < 16 {
+            for x in 0..(16 - bytes.len()) {
+                let num = 15 - x;
+                if num == 8 {
+                    write!(s, "    ");
+                } else {
+                    write!(s, "   ");
+                }
+            }
+        }
+
+        
+        write!(s, " |");
+        
+        for b in bytes {
+            if *b > 31  && *b < 127 {
+                write!(s, "{}", char::from(*b));
+            } else {
+                write!(s, ".");
+            }
+        }
+
+        write!(s, "|");
+    }
+
+    write!(s, "\n");
+
+    s
+}
+
 impl MtProtoConnection {
     fn new(encrypted: bool) -> Result<MtProtoConnection, io::Error> {
-        let connection = TcpStream::connect("149.154.167.50:443")?;
+        let connection = TcpStream::connect("149.154.167.40:443")?;
 
         Ok(MtProtoConnection {
             conn: connection,
@@ -72,13 +117,37 @@ impl MtProtoConnection {
         } else {
             let msg_id = self.get_msg_id();
 
-            self.conn.write_i64::<LittleEndian>(0)?; // auth_key_id = 0; int64
-            self.conn.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
-            self.conn.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
-            self.conn.write_all(message_data)?; // message_data; bytes
+            let mut buf = Cursor::new(vec![0; 20 + message_data.len()]);
+
+            buf.write_i64::<LittleEndian>(0)?; // auth_key_id = 0; int64
+            buf.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
+            buf.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
+            buf.write_all(message_data)?; // message_data; bytes
+
+            self.conn.write_all(buf.get_ref())?;
+
+            self.conn.flush();
         }
 
         Ok(())
+    }
+
+    fn read(&mut self) -> Result<Vec<u8>, io::Error> {
+        if self.encrypted {
+            unimplemented!();
+        } else {
+            let auth_key_id = self.conn.read_i64::<LittleEndian>()?;
+            let message_id = self.conn.read_i64::<LittleEndian>()?;
+            let message_data_length = self.conn.read_i32::<LittleEndian>()?;
+            
+            println!("{:?}", message_data_length);
+            println!("{:?}", message_data_length as usize);
+
+            let mut message_data = vec![0; message_data_length as usize];
+            self.conn.read(&mut message_data)?;
+
+            Ok(message_data)
+        }
     }
 
     fn get_msg_id(&self) -> i64 {
@@ -95,103 +164,96 @@ mod tests {
     use std::io::Cursor;
     use super::*;
 
-    // #[test]
-    // fn authenticate() {
-    //     use std::io::Read;
-    //     use rand::Rng;
+    #[test]
+    fn time() {
+        let current_time = time::get_time();
+
+        let msg_id = current_time.sec << 32 | (current_time.nsec as i64) << 2;
+
+        println!("0x{:x}", msg_id);
+    }
+
+    #[test]
+    fn authenticate() {
+        use std::io::Read;
+        use rand::Rng;
+
+        let mut connection = MtProtoConnection::new(false).unwrap();
+        let mut rng = rand::thread_rng();
+        let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+
+        let request = functions::ReqPq {
+            nonce: (rng.gen::<u64>(), rng.gen::<u64>())
+        };
+
+        buf.serialize(&request);
+
+        let s = dump_bytes(buf.get_ref());
+        println!("{}", s);
+
+        connection.send(buf.get_ref());
+
+        let mut buffer = connection.read().unwrap();
+
+        // let auth_key_id = connection.conn.read_i64::<LittleEndian>().unwrap();
+        // let message_id = connection.conn.read_i64::<LittleEndian>().unwrap();
+        // let message_data_length = connection.conn.read_i32::<LittleEndian>().unwrap();
         
-    //     let connection = MtProtoConnection::new(false).unwrap();
-    //     let mut rng = rand::thread_rng();
-    //     let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+        // println!("{:?}", message_data_length);
+        // println!("{:?}", message_data_length as usize);
 
-    //     buf.serialize(&functions::ReqPq {
-    //         nonce: (rng.gen::<u64>(), rng.gen::<u64>())
-    //     });
+        // let mut message_data = vec![0; message_data_length as usize];
+        // connection.conn.read(&mut message_data).unwrap();
 
-    //     connection.send(buf.get_ref());
-
-    //     let mut buffer = [0; 16];
-
-    //     // read up to 10 bytes
-    //     connection.conn.read(&mut buffer).unwrap();
-    //     println!("{:?}", buffer);
-    // }
+        // println!("{:?}", message_data);
+    }
 
     #[test]
     fn test_ser_des() {
         use std::fmt::Write;
 
         let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-        let start = constructors::User::User {
-            flags: 0, // flags is generated on serialize
-            sself: true,
-            contact: false,
-            mutual_contact: false,
-            deleted: false,
-            bot: false,
-            bot_chat_history: false,
-            bot_nochats: false,
-            verified: false,
-            restricted: false,
-            min: false,
-            bot_inline_geo: false,
-            id: 987654321,
-            access_hash: Some(123456789),
-            first_name: Some("Juan".to_string()),
-            last_name: Some("Potato".to_string()),
-            username: None,
-            phone: None,
-            photo: Some(constructors::UserProfilePhoto::Empty.into()),
-            status: None,
-            bot_info_version: None,
-            restriction_reason: None,
-            bot_inline_placeholder: None,
-            lang_code: None,
+        // let start = constructors::User::User {
+        //     flags: 0, // flags is generated on serialize
+        //     sself: true,
+        //     contact: false,
+        //     mutual_contact: false,
+        //     deleted: false,
+        //     bot: false,
+        //     bot_chat_history: false,
+        //     bot_nochats: false,
+        //     verified: false,
+        //     restricted: false,
+        //     min: false,
+        //     bot_inline_geo: false,
+        //     id: 987654321,
+        //     access_hash: Some(123456789),
+        //     first_name: Some("Juan".to_string()),
+        //     last_name: Some("Potato".to_string()),
+        //     username: None,
+        //     phone: None,
+        //     photo: Some(constructors::UserProfilePhoto::Empty.into()),
+        //     status: None,
+        //     bot_info_version: None,
+        //     restriction_reason: None,
+        //     bot_inline_placeholder: None,
+        //     lang_code: None,
+        // };
+        let start = constructors::InputPeerNotifySettings {
+            flags: 0,
+            show_previews: true,
+            silent: false,
+            mute_until: 420,
+            sound: "woof".to_string(),
         };
 
         buf.serialize(&start);
 
-        let mut s: String = String::new();
-
-        for (i, bytes) in buf.get_ref().chunks(16).enumerate() { // hexdump -C
-            write!(s, "\n{:08x}  ", i * 16);
-
-            for (i, b) in bytes.iter().enumerate() {
-                if i == 8 {
-                    write!(s, " ");
-                }
-                write!(s, "{:02x} ", b);
-            }
-
-            if bytes.len() < 16 {
-                for x in 0..(16 - bytes.len()) {
-                    let num = 15 - x;
-                    if num == 8 {
-                        write!(s, "    ");
-                    } else {
-                        write!(s, "   ");
-                    }
-                }
-            }
-
-            
-            write!(s, " |");
-            
-            for b in bytes {
-                if *b > 31  && *b < 127 {
-                    write!(s, "{}", char::from(*b));
-                } else {
-                    write!(s, ".");
-                }
-            }
-
-            write!(s, "|");
-        }
-
-        write!(s, "\n");
+        let s = dump_bytes(buf.get_ref());
 
         buf.set_position(0);
-        let end: constructors::User = buf.deserialize().unwrap();
+        // let end: constructors::User = buf.deserialize().unwrap();
+        let end: constructors::InputPeerNotifySettings = buf.deserialize().unwrap();
 
         println!("{:#?}", start);
 

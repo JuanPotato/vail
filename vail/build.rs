@@ -154,7 +154,7 @@ fn main() {
     // Write the TlType enum
     write!(cons_out,
        "#[derive(Debug)]\n\
-        enum TlType {{").expect("Could not write to constructor file");
+        pub enum TlType {{").expect("Could not write to constructor file");
 
     for ref cons in &constructors {
         if done.contains(&&cons.item_type) {
@@ -188,7 +188,7 @@ fn main() {
     // Write the TlFunc enum
     write!(func_out,
        "#[derive(Debug)]\n\
-        enum TlFunc {{").expect("Could not write to functions file");
+        pub enum TlFunc {{").expect("Could not write to functions file");
 
     for ref func in &functions {
         write!(func_out,
@@ -304,19 +304,19 @@ fn write_struct(tl_struct: &TlItem, func: bool) -> String {
             if arg.flag_bit < 0 {
                 write!(output,
                     "\n    #[flag_bit = \"{}\"]\
-                     \n    {}: {},",
+                     \n    pub {}: {},",
                     arg.flag_bit,
                     filter_arg_name(&arg.name),
                     arg_type).expect("Error writing struct to string");
             } else if arg.flag_bit > 0 {
                 write!(output,
                     "\n    #[flag_bit = \"{}\"]\
-                     \n    {}: Option<{}>,",
+                     \n    pub {}: Option<{}>,",
                     arg.flag_bit,
                     filter_arg_name(&arg.name),
                     arg_type).expect("Error writing struct to string");
             } else {
-                write!(output, "\n    {}: {},",
+                write!(output, "\n    pub {}: {},",
                     filter_arg_name(&arg.name),
                     tl_type_to_rust(&arg.arg_type)).expect("Error writing struct to string");
             }
