@@ -9,15 +9,15 @@ pub trait Serialize<S> {
     fn serialize(&mut self, obj: &S) -> Result<(), io::Error>;
 }
 
-impl Serialize<bool> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &bool) -> Result<(), io::Error> {
-        let id: u32 = if *obj { 0x997275b5 } else { 0xbc799737 };
+// impl Serialize<bool> for Cursor<Vec<u8>> {
+//     fn serialize(&mut self, obj: &bool) -> Result<(), io::Error> {
+//         let id: u32 = if *obj { 0x997275b5 } else { 0xbc799737 };
 
-        <Self as Serialize<u32>>::serialize(self, &id)?;
+//         <Self as Serialize<u32>>::serialize(self, &id)?;
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
 impl Serialize<u32> for Cursor<Vec<u8>> {
     fn serialize(&mut self, obj: &u32) -> Result<(), io::Error> {

@@ -403,8 +403,8 @@ fn impl_des(t: &RustType) -> String {
             // Begin Deserialize
             let mut buf = format!(
                 "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
-                        let received_tl_id = self.deserialize::<u32>()?;\n
+                    fn _deserialize(&mut self, received_tl_id: u32) -> Result<{name}, io::Error> {{\n        \
+                        let received_tl_id = if received_tl_id == 0 {{ self.deserialize::<u32>(0)? }} else {{ received_tl_id }};\n        \
                         if received_tl_id != {tl_id} {{
                             return Err(io::Error::new(io::ErrorKind::InvalidInput, format!(\"Incorrect tl_id for {name}. Expected {tl_id}, received {{}}\", received_tl_id) ));
                         }}\n",
@@ -422,11 +422,11 @@ fn impl_des(t: &RustType) -> String {
                     fil_type = &fil_type[6..fil_type.len()-2];
                     is_box = true;
                 }
-                    
+
                 if arg.flag > 0 {
                     write!(buf,
                       "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                   Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                                   Some({opt_box1}self.deserialize::<{type_}>(0)?{opt_box2})\n            \
                                }} else {{\n            \
                                    None\n            \
                                }};\n",
@@ -437,7 +437,7 @@ fn impl_des(t: &RustType) -> String {
                         name = arg.name, flag = arg.flag.abs() - 1).unwrap();
                 } else {
                     write!(buf,
-                        "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
+                        "        let {name} = self.deserialize::<{type_}>(0)?{opt_box};\n",
                         type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" }).unwrap();
                 }
             }
@@ -459,9 +459,9 @@ fn impl_des(t: &RustType) -> String {
             // Begin Deserialize
             let mut buf = format!(
                 "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn _deserialize(&mut self) -> Result<{name}, io::Error> {{\n        \
-                        let tl_id = self.deserialize::<u32>()?;
-                        match tl_id {{", name = name);
+                    fn _deserialize(&mut self, received_tl_id: u32) -> Result<{name}, io::Error> {{\n        \
+                        let received_tl_id = if received_tl_id == 0 {{ self.deserialize::<u32>(0)? }} else {{ received_tl_id }};\n        \
+                        match received_tl_id {{", name = name);
 
             for variant in variants {
                 write!(buf, "\n {0}u32 => {{\n", variant.tl_id).unwrap();
@@ -478,11 +478,13 @@ fn impl_des(t: &RustType) -> String {
                         fil_type = &fil_type[6..fil_type.len()-2];
                         is_box = true;
                     }
-                    
+
+                    // Check if primitive and then set whether or not we need to read the id to deserialize
+
                     if arg.flag > 0 {
                         write!(buf,
                           "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                       Some({opt_box1}self.deserialize::<{type_}>()?{opt_box2})\n            \
+                                       Some({opt_box1}self.deserialize::<{type_}>(0)?{opt_box2})\n            \
                                    }} else {{\n            \
                                        None\n            \
                                    }};\n",
@@ -493,7 +495,7 @@ fn impl_des(t: &RustType) -> String {
                             name = arg.name, flag = arg.flag.abs() - 1).unwrap();
                     } else {
                         write!(buf,
-                            "        let {name} = self.deserialize::<{type_}>()?{opt_box};\n",
+                            "        let {name} = self.deserialize::<{type_}>(0)?{opt_box};\n",
                             type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" }).unwrap();
                     }
                 }
@@ -508,8 +510,8 @@ fn impl_des(t: &RustType) -> String {
                 buf.push_str("}) }\n")
             }
             
-            buf.push_str("_ => {Err(io::Error::new(io::ErrorKind::NotFound, \"You gave me an id for a Type, that id was not for that type. Oh no\"))}");
-            // write!(buf, "_ => {{Err(io::Error::new(io::ErrorKind::InvalidInput, format!(\"No variant of {name} found with tl_id of {{}}\", tl_id) ))}}", name = name);
+            // buf.push_str("_ => {Err(io::Error::new(io::ErrorKind::NotFound, \"You gave me an id for a Type, that id was not for that type. Oh no\"))}");
+            write!(buf, "_ => {{Err(io::Error::new(io::ErrorKind::NotFound, format!(\"No variant of {name} found with tl_id of {{}}\", received_tl_id) ))}}", name = name);
 
             buf.push_str("        }\n    }\n}\n");
             // End Deserialize

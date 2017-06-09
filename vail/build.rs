@@ -176,6 +176,82 @@ fn main() {
     // Implement Serialize and Deserialize for TlType that just points to the
     // variant's function
 
+    // Serialize for TlType
+    write!(cons_out,
+        "\n\nimpl Serialize<TlType> for Cursor<Vec<u8>> {{\n    \
+            fn serialize(&mut self, cons: &TlType) -> Result<(), io::Error> {{\n        \
+                match *cons {{\n").expect("Could not write to constructors file");
+
+    for ref cons in &constructors {
+        if *type_counts.get(&cons.item_type).unwrap() == 1 && cons.item_type == cons.name {
+            // It's going to be a struct
+            write!(cons_out,"            \
+                TlType::{0}(ref obj) => <Self as Serialize<{0}>>::serialize(self, &obj)?,\n",
+                cons.item_type).expect("Could not write to constructors file");
+        } else {
+            // Its going to be an enum
+            if done.contains(&&cons.item_type) {
+                continue;
+            }
+
+            write!(cons_out,"            \
+                TlType::{0}(ref obj) => <Self as Serialize<{0}>>::serialize(self, &obj)?,\n",
+                cons.item_type).expect("Could not write to constructors file");
+
+            done.push(&cons.item_type);
+        }
+    }
+
+    write!(cons_out, "        }}\n\n        Ok(())\n    }}\n}}").expect("Could not write to constructors file");
+
+    done.clear();
+
+    // Deserialize for TlType
+    write!(cons_out,
+        "\n\nimpl Deserialize<TlType> for Cursor<Vec<u8>> {{\n    \
+            fn _deserialize(&mut self, received_tl_id: u32) -> Result<TlType, io::Error> {{\n        \
+                let received_tl_id = if received_tl_id == 0 {{ self.deserialize::<u32>(0)? }} else {{ received_tl_id }};\n        \
+                match received_tl_id {{\n").expect("Could not write to constructors file");
+
+    for ref cons in &constructors {
+        if *type_counts.get(&cons.item_type).unwrap() == 1 && cons.item_type == cons.name {
+            // It's going to be a struct
+            write!(cons_out,"            \
+                0x{0:x} => Ok(self.deserialize::<{1}>(received_tl_id)?.into()),\n",
+                cons.id, cons.item_type).expect("Could not write to constructors file");
+        } else {
+            // Its going to be an enum
+            if done.contains(&&cons.item_type) {
+                continue;
+            }
+
+            let mut add_or = false;
+
+            write!(cons_out, "            ");
+
+            for similar_cons in constructors.iter() {
+                if similar_cons.item_type != cons.item_type {
+                    continue;
+                }
+
+                if add_or {
+                    write!(cons_out, "| ");
+                }
+
+                write!(cons_out, "0x{0:x} ", similar_cons.id).expect("Could not write to constructors file");
+                add_or = true;
+            }
+
+            write!(cons_out,"=> Ok(self.deserialize::<{}>(received_tl_id)?.into()),\n",
+                cons.item_type).expect("Could not write to constructors file");
+
+            done.push(&cons.item_type);
+        }
+    }
+    
+    write!(cons_out, "            _ => Err(io::Error::new(io::ErrorKind::InvalidInput, format!(\"Uknown tl_id: {{}}\", received_tl_id) ))\n").expect("Could not write to constructors file");
+    write!(cons_out, "        }}\n    }}\n}}").expect("Could not write to constructors file");
+
     cons_out.flush().expect("Error while flushing constructor file");
 
     
@@ -405,13 +481,13 @@ fn tl_type_to_rust(s: &str) -> String {
     let mut do_box = false;
 
     let new_s = match s {
-        "#"      => "u32",
+        "#" => "u32",
         "True" | "bool" |
-        "Bool"   => s,
+        "Bool" => s,
         "Vector<string>" | "Vector<String>" => "Vec<String>",
         "string"| "String" => "String",
         "Int"  |
-        "int"    => "i32",
+        "int" => "i32",
         "Int128" | "Int256" => s,
         "Vector<Int>" |
         "Vector<int>" => "Vec<i32>",
