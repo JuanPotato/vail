@@ -1,4 +1,8 @@
-fn factor(pq: u64) -> (u64, u64) {
+extern crate rand;
+
+use rand::Rng;
+
+pub fn factor(pq: u64) -> (u64, u64) {
     let mut rng = rand::thread_rng();
 
     let mut q = 0;
@@ -52,4 +56,15 @@ fn factor(pq: u64) -> (u64, u64) {
 
     let p = pq / q;
     return if p < q { (p, q) } else { (q, p) };
+}
+
+fn gcd(x: u64, y: u64) -> u64 {
+    let mut x = x;
+    let mut y = y;
+    while y != 0 {
+        let t = y;
+        y = x % y;
+        x = t;
+    }
+    x
 }

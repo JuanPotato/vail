@@ -9,7 +9,7 @@ pub trait Serialize<S> {
     fn serialize(&mut self, obj: &S) -> Result<(), io::Error>;
 }
 
-// impl Serialize<bool> for Cursor<Vec<u8>> {
+// impl<S> Serialize<bool> for S where S: Write {
 //     fn serialize(&mut self, obj: &bool) -> Result<(), io::Error> {
 //         let id: u32 = if *obj { 0x997275b5 } else { 0xbc799737 };
 
@@ -19,7 +19,7 @@ pub trait Serialize<S> {
 //     }
 // }
 
-impl Serialize<u32> for Cursor<Vec<u8>> {
+impl<S> Serialize<u32> for S where S: Write {
     fn serialize(&mut self, obj: &u32) -> Result<(), io::Error> {
         self.write_u32::<LittleEndian>(*obj)?;
         
@@ -27,7 +27,7 @@ impl Serialize<u32> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<i32> for Cursor<Vec<u8>> {
+impl<S> Serialize<i32> for S where S: Write {
     fn serialize(&mut self, obj: &i32) -> Result<(), io::Error> {
         self.write_i32::<LittleEndian>(*obj)?;
         
@@ -35,7 +35,7 @@ impl Serialize<i32> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<f32> for Cursor<Vec<u8>> {
+impl<S> Serialize<f32> for S where S: Write {
     fn serialize(&mut self, obj: &f32) -> Result<(), io::Error> {
         self.write_f32::<LittleEndian>(*obj)?;
         
@@ -43,7 +43,7 @@ impl Serialize<f32> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<i64> for Cursor<Vec<u8>> {
+impl<S> Serialize<i64> for S where S: Write {
     fn serialize(&mut self, obj: &i64) -> Result<(), io::Error> {
         self.write_i64::<LittleEndian>(*obj)?;
         
@@ -51,7 +51,7 @@ impl Serialize<i64> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<f64> for Cursor<Vec<u8>> {
+impl<S> Serialize<f64> for S where S: Write {
     fn serialize(&mut self, obj: &f64) -> Result<(), io::Error> {
         self.write_f64::<LittleEndian>(*obj)?;
         
@@ -59,7 +59,7 @@ impl Serialize<f64> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<Int128> for Cursor<Vec<u8>> {
+impl<S> Serialize<Int128> for S where S: Write {
     fn serialize(&mut self, obj: &Int128) -> Result<(), io::Error> {
         self.write_u64::<LittleEndian>(obj.1)?;
         self.write_u64::<LittleEndian>(obj.0)?;
@@ -68,7 +68,7 @@ impl Serialize<Int128> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<Int256> for Cursor<Vec<u8>> {
+impl<S> Serialize<Int256> for S where S: Write {
     fn serialize(&mut self, obj: &Int256) -> Result<(), io::Error> {
         self.write_u64::<LittleEndian>(obj.3)?;
         self.write_u64::<LittleEndian>(obj.2)?;
@@ -79,7 +79,7 @@ impl Serialize<Int256> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<Vec<u8>> for Cursor<Vec<u8>> {
+impl<S> Serialize<Vec<u8>> for S where S: Write {
     fn serialize(&mut self, obj: &Vec<u8>) -> Result<(), io::Error>  {
         let mut len = obj.len();
         
@@ -100,7 +100,7 @@ impl Serialize<Vec<u8>> for Cursor<Vec<u8>> {
     }
 }
 
-impl Serialize<String> for Cursor<Vec<u8>> {
+impl<S> Serialize<String> for S where S: Write {
     fn serialize(&mut self, obj: &String) -> Result<(), io::Error> {
         let mut len = obj.len();
         
