@@ -7,17 +7,15 @@ extern crate crc;
 extern crate openssl;
 extern crate sha1;
 
-// extern crate num_bigint;
-
-// use num_bigint::BigUint;
-
-use openssl::rsa::{NO_PADDING, Rsa};
+use openssl::rsa::Rsa;
+use openssl::bn::{BigNum, BigNumContext};
 
 use crc::{crc32, Hasher32};
 
 use std::io;
-use std::io::{Write, Read};
-use std::io::Cursor;
+use std::io::{Write, Read, Cursor};
+use std::ops::Deref;
+
 
 use std::net::{TcpStream, ToSocketAddrs};
 // use deserialize::Deserializer;
@@ -173,6 +171,7 @@ impl MtProtoConnection {
             // length of everything. length, seq_num, auth_key_id, message_id,
             // message_data_length, message_data, crc32
             buffer.write_i32::<LittleEndian>(self.seq_num)?;
+            self.seq_num += 1;
 
             let msg_id = self.get_msg_id();
 
@@ -241,6 +240,9 @@ impl MtProtoConnection {
 
 #[cfg(test)]
 mod tests {
+    extern crate rand;
+
+    use rand::Rng;
     use deserialize::Deserializer;
     use serialize::Serialize;
     use std::io::Cursor;
@@ -319,11 +321,11 @@ mod tests {
         // 4) Client sends query to server
         // req_DH_params#d712e4be nonce:int128 server_nonce:int128 p:string q:string public_key_fingerprint:long encrypted_data:string = Server_DH_Params
 
-        let mut p_bytes = vec![0u8; 8];
-        BigEndian::write_u64(p_bytes.as_mut_slice(), p);
+        let mut p_bytes = vec![0u8; 4];
+        BigEndian::write_u32(p_bytes.as_mut_slice(), p as u32);
 
-        let mut q_bytes = vec![0u8; 8];
-        BigEndian::write_u64(q_bytes.as_mut_slice(), q);
+        let mut q_bytes = vec![0u8; 4];
+        BigEndian::write_u32(q_bytes.as_mut_slice(), q as u32);
 
         let p_q_inner_data = constructors::PQInnerData {
             pq: res_pq.pq,
@@ -349,18 +351,21 @@ mod tests {
         ser_p_q_inner_data.write_all(&hash);
 
         ser_p_q_inner_data.set_position(return_position);
-        ser_p_q_inner_data.write_all(&vec![0u8; 256 - return_position as usize]);
 
+        let mut rng = rand::thread_rng();
+        let rand_bytes = rng.gen_iter::<u8>().take(255 - return_position as usize).collect::<Vec<u8>>();
+        ser_p_q_inner_data.write_all(&rand_bytes);
 
         // logs
-        let p_q_inner_data_dump = dump_bytes(ser_p_q_inner_data.get_ref()).unwrap();
+        let p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()[20..return_position as usize]).unwrap();
+        let full_p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()).unwrap();
         
         println!("p_q_inner_data_dump: {}", p_q_inner_data_dump);
-        println!("pq: {:#?}", p_bytes);
-        println!("q: {:#?}", q_bytes);
-        println!("p: {:#?}", p_bytes);
+        println!("full_p_q_inner_data_dump: {}", full_p_q_inner_data_dump);
+        println!("pq: {:?}", p_q_inner_data.pq);
+        println!("q: {:?}", q_bytes);
+        println!("p: {:?}", p_bytes);
         // println!("p_q_inner_data: {:#?}", p_q_inner_data);
-
 
         let rsa_key_bytes = String::from("-----BEGIN PUBLIC KEY-----\n\
         MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwVACPi9w23mF3tBkdZz+\n\
@@ -374,12 +379,19 @@ mod tests {
 
         let rsa_key = Rsa::public_key_from_pem(&rsa_key_bytes).unwrap(); // no, return error
 
+        let base = BigNum::from_slice(ser_p_q_inner_data.get_ref()).unwrap();
+        let e = rsa_key.e().unwrap();
+        let n = rsa_key.n().unwrap();
 
-        let mut encrypted_data = vec![0; 256];
-        rsa_key.public_encrypt(ser_p_q_inner_data.get_ref(), encrypted_data.as_mut_slice(), NO_PADDING).unwrap();
+        let mut res = BigNum::new().unwrap();
+        let mut ctx = BigNumContext::new().unwrap();
+
+        res.mod_exp(base.deref(), e, n, &mut ctx).unwrap();
+
+
+        let mut encrypted_data = res.to_vec();
 
         println!("encrypted_data:{}", dump_bytes(encrypted_data.as_ref()).unwrap());
-
 
         let req_dh_params = functions::ReqDHParams {
             nonce: res_pq.nonce,
@@ -402,7 +414,7 @@ mod tests {
         let req_dh_params_dump = dump_bytes(ser_req_dh_params.get_ref()).unwrap();
         
         println!("req_dh_params_dump: {}", req_dh_params_dump);
-        println!("req_dh_params: {:#?}", req_dh_params);
+        println!("req_dh_params: {:?}", req_dh_params);
 
 
 
@@ -419,8 +431,7 @@ mod tests {
         let server_dh_params_dump = dump_bytes(message_data.get_ref()).unwrap();
         
         println!("server_dh_params_dump: {}", server_dh_params_dump);
-        println!("server_dh_params: {:#?}", server_dh_params);
-
+        println!("server_dh_params: {:?}", server_dh_params);
     }
 
     #[test]

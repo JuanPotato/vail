@@ -15,7 +15,6 @@ time = "0.1"
 rand = "0.3"
 crc = "1.4"
 sha1 = "0.2.0"
-num-bigint = "0.1.39"
 
 [dependencies.tl_derive]
 path = "../tl_derive"
