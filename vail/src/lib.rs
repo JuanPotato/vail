@@ -262,6 +262,26 @@ mod tests {
         use std::io::Read;
         use rand::Rng;
 
+        fn ser_and_hash<T>(buf: &mut Cursor<Vec<u8>>, obj: &T) -> Result<(), io::Error> where Cursor<Vec<u8>>: Serialize<T> {
+            let start_pos = buf.position();
+
+            buf.set_position(start_pos + 20);
+            buf.serialize(&obj)?;
+            
+            let end_pos = buf.position();
+
+            let mut hasher = sha1::Sha1::new();
+            hasher.update(&buf.get_ref()[(start_pos + 20) as usize .. end_pos as usize]);
+
+            buf.set_position(start_pos);
+            let hash = hasher.digest().bytes();
+            buf.write_all(&hash)?;
+
+            buf.set_position(end_pos);
+
+            Ok(())
+        }
+
         // ﻿Creating an Authorization Key
         // https://core.telegram.org/mtproto/auth_key
 
@@ -273,8 +293,10 @@ mod tests {
         // 1) Client sends query to server
         // req_pq#60469778 nonce:int128 = ResPQ
 
+        let nonce = (rng.gen::<u64>(), rng.gen::<u64>());
+
         let request = functions::ReqPq {
-            nonce: (rng.gen::<u64>(), rng.gen::<u64>())
+            nonce: nonce.clone()
         };
 
         buf.serialize(&request).unwrap();
@@ -283,10 +305,10 @@ mod tests {
 
         // logs
         
-        let req_pq_dump = dump_bytes(buf.get_ref()).unwrap();
+        // let req_pq_dump = dump_bytes(buf.get_ref()).unwrap();
         
-        println!("{}", req_pq_dump);
-        println!("{:#?}", request);
+        // println!("{}", req_pq_dump);
+        // println!("{:#?}", request);
 
 
 
@@ -296,13 +318,14 @@ mod tests {
         let mut message_data = Cursor::new(connection.receive().unwrap());
         
         let res_pq: constructors::ResPQ = message_data.deserialize(0).unwrap();
+        let server_nonce = res_pq.server_nonce;
         
         // logs
 
-        let res_pq_dump = dump_bytes(message_data.get_ref()).unwrap();
+        // let res_pq_dump = dump_bytes(message_data.get_ref()).unwrap();
         
-        println!("{}", res_pq_dump);
-        println!("{:#?}", res_pq);
+        // println!("{}", res_pq_dump);
+        // println!("{:#?}", res_pq);
 
 
 
@@ -313,7 +336,7 @@ mod tests {
 
         // logs
 
-        println!("p:{}\nq:{}", p, q);
+        // println!("p:{}\nq:{}", p, q);
 
 
 
@@ -327,44 +350,32 @@ mod tests {
         let mut q_bytes = vec![0u8; 4];
         BigEndian::write_u32(q_bytes.as_mut_slice(), q as u32);
 
+        let new_nonce = (rng.gen::<u64>(), rng.gen::<u64>(), rng.gen::<u64>(), rng.gen::<u64>());
         let p_q_inner_data = constructors::PQInnerData {
             pq: res_pq.pq,
             p: p_bytes.clone(),
             q: q_bytes.clone(),
-            nonce: res_pq.nonce,
-            server_nonce: res_pq.server_nonce,
-            new_nonce: (rng.gen::<u64>(), rng.gen::<u64>(), rng.gen::<u64>(), rng.gen::<u64>()),
+            nonce: nonce.clone(),
+            server_nonce: server_nonce.clone(),
+            new_nonce: new_nonce.clone(),
         };
 
         let mut ser_p_q_inner_data = Cursor::new(Vec::new());
-
-        ser_p_q_inner_data.set_position(20);
-        ser_p_q_inner_data.serialize(&p_q_inner_data).unwrap();
-        
-        let return_position = ser_p_q_inner_data.position();
-
-        let mut hasher = sha1::Sha1::new();
-        hasher.update(&ser_p_q_inner_data.get_ref()[20..]);
-
-        ser_p_q_inner_data.set_position(0);
-        let hash = hasher.digest().bytes();
-        ser_p_q_inner_data.write_all(&hash);
-
-        ser_p_q_inner_data.set_position(return_position);
+        ser_and_hash(&mut ser_p_q_inner_data, &p_q_inner_data);
 
         let mut rng = rand::thread_rng();
-        let rand_bytes = rng.gen_iter::<u8>().take(255 - return_position as usize).collect::<Vec<u8>>();
+        let rand_bytes = rng.gen_iter::<u8>().take(255 - ser_p_q_inner_data.position() as usize).collect::<Vec<u8>>();
         ser_p_q_inner_data.write_all(&rand_bytes);
 
         // logs
-        let p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()[20..return_position as usize]).unwrap();
-        let full_p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()).unwrap();
+        // let p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()[20..return_position as usize]).unwrap();
+        // let full_p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()).unwrap();
         
-        println!("p_q_inner_data_dump: {}", p_q_inner_data_dump);
-        println!("full_p_q_inner_data_dump: {}", full_p_q_inner_data_dump);
-        println!("pq: {:?}", p_q_inner_data.pq);
-        println!("q: {:?}", q_bytes);
-        println!("p: {:?}", p_bytes);
+        // println!("p_q_inner_data_dump: {}", p_q_inner_data_dump);
+        // println!("full_p_q_inner_data_dump: {}", full_p_q_inner_data_dump);
+        // println!("pq: {:?}", p_q_inner_data.pq);
+        // println!("q: {:?}", q_bytes);
+        // println!("p: {:?}", p_bytes);
         // println!("p_q_inner_data: {:#?}", p_q_inner_data);
 
         let rsa_key_bytes = String::from("-----BEGIN PUBLIC KEY-----\n\
@@ -394,8 +405,8 @@ mod tests {
         println!("encrypted_data:{}", dump_bytes(encrypted_data.as_ref()).unwrap());
 
         let req_dh_params = functions::ReqDHParams {
-            nonce: res_pq.nonce,
-            server_nonce: res_pq.server_nonce,
+            nonce: nonce.clone(),
+            server_nonce: server_nonce.clone(),
             p: p_bytes,
             q: q_bytes,
             public_key_fingerprint: res_pq.server_public_key_fingerprints[0],
@@ -426,12 +437,168 @@ mod tests {
         
         let server_dh_params: constructors::ServerDHParams = message_data.deserialize(0).unwrap();
         
+        
         // logs
 
         let server_dh_params_dump = dump_bytes(message_data.get_ref()).unwrap();
         
         println!("server_dh_params_dump: {}", server_dh_params_dump);
-        println!("server_dh_params: {:?}", server_dh_params);
+        println!("server_dh_params: {:?}", &server_dh_params);
+
+
+        let encrypted_answer = match server_dh_params {
+            constructors::ServerDHParams::Ok {encrypted_answer, ..} => encrypted_answer,
+            constructors::ServerDHParams::Fail { .. } => panic!("ServerDHParams failed, replace with real error"),
+        };
+
+
+        let mut new_nonce_bytes = vec![0u8; 32];
+        LittleEndian::write_u64(&mut new_nonce_bytes[0..8], new_nonce.3);
+        LittleEndian::write_u64(&mut new_nonce_bytes[8..16], new_nonce.2);
+        LittleEndian::write_u64(&mut new_nonce_bytes[16..24], new_nonce.1);
+        LittleEndian::write_u64(&mut new_nonce_bytes[24..32], new_nonce.0);
+
+        let mut server_nonce_bytes = vec![0u8; 16];
+        LittleEndian::write_u64(&mut server_nonce_bytes[0..8], server_nonce.1);
+        LittleEndian::write_u64(&mut server_nonce_bytes[8..16], server_nonce.0);
+
+        
+        let mut hasher = sha1::Sha1::new();
+        hasher.update(&new_nonce_bytes);
+        hasher.update(&server_nonce_bytes);
+
+        let new_nonce_server_nonce_hash = hasher.digest().bytes();
+        println!("new_nonce_server_nonce_hash: {}", dump_bytes(&new_nonce_server_nonce_hash).unwrap());
+        
+        
+        hasher.reset();
+        hasher.update(&server_nonce_bytes);
+        hasher.update(&new_nonce_bytes);
+
+        let server_nonce_new_nonce_hash = hasher.digest().bytes();
+        println!("server_nonce_new_nonce_hash: {}", dump_bytes(&server_nonce_new_nonce_hash).unwrap());
+        
+        
+        hasher.reset();
+        hasher.update(&new_nonce_bytes);
+        hasher.update(&new_nonce_bytes);
+
+        let new_nonce_new_nonce_hash = hasher.digest().bytes();
+        println!("new_nonce_new_nonce_hash: {}", dump_bytes(&new_nonce_new_nonce_hash).unwrap());
+
+
+        let mut tmp_aes_key = Cursor::new(Vec::with_capacity(32));
+        tmp_aes_key.write_all(&new_nonce_server_nonce_hash);
+        tmp_aes_key.write_all(&server_nonce_new_nonce_hash[0..12]);
+
+        let mut tmp_aes_iv = Cursor::new(Vec::with_capacity(32));
+        tmp_aes_iv.write_all(&server_nonce_new_nonce_hash[12..20]);
+        tmp_aes_iv.write_all(&new_nonce_new_nonce_hash);
+        tmp_aes_iv.write_all(&new_nonce_bytes[0..4]);
+
+
+        // logs
+        println!("");
+        println!("tmp_aes_key: {}", dump_bytes(tmp_aes_key.get_ref()).unwrap());
+        println!("tmp_aes_iv: {}", dump_bytes(tmp_aes_iv.get_ref()).unwrap());
+
+        let aes_decrypt_key = openssl::aes::AesKey::new_decrypt(tmp_aes_key.get_ref()).unwrap();
+        let mut decrypted_answer = vec![0u8; encrypted_answer.len()];
+
+        let mut iv = tmp_aes_iv.clone();
+        openssl::aes::aes_ige(&encrypted_answer, &mut decrypted_answer, &aes_decrypt_key, iv.get_mut(), openssl::symm::Mode::Decrypt);
+
+        let mut answer = Cursor::new(decrypted_answer);
+
+        answer.set_position(20); // Don't skip the sha1, verify it
+        let server_dh_inner_data: constructors::ServerDHInnerData = answer.deserialize(0).unwrap();
+
+        // logs
+
+        let answer_dump = dump_bytes(answer.get_ref()).unwrap();
+        
+        println!("answer dump: {}", answer_dump);
+        println!("server_dh_inner_data: {:?}", &server_dh_inner_data);
+
+
+
+        // 6) Client computes random 2048-bit number b (using a sufficient amount of entropy) and sends the server a message
+        // set_client_DH_params#f5045f1f nonce:int128 server_nonce:int128 encrypted_data:string = Set_client_DH_params_answer;
+
+        let dh_prime = BigNum::from_slice(&server_dh_inner_data.dh_prime).unwrap();
+        let g = BigNum::from_u32(server_dh_inner_data.g as u32).unwrap();
+        let g_a = BigNum::from_slice(&server_dh_inner_data.g_a).unwrap();
+
+        let mut b = BigNum::new().unwrap();
+        b.rand(2048, openssl::bn::MSB_MAYBE_ZERO, true).unwrap();
+
+        let mut g_b = BigNum::new().unwrap();
+        let mut ctx = BigNumContext::new().unwrap();
+
+        g_b.mod_exp(g.deref(), b.deref(), dh_prime.deref(), &mut ctx).unwrap();
+
+        let client_dh_inner_data = constructors::ClientDHInnerData {
+            nonce: nonce.clone(),
+            server_nonce: server_nonce.clone(),
+            retry_id: 0, // TODO: do something when fail, ye
+            g_b: g_b.to_vec(),
+        };
+
+        let mut ser_client_dh_inner_data = Cursor::new(Vec::new());
+        ser_and_hash(&mut ser_client_dh_inner_data, &client_dh_inner_data);
+
+        let to_mod16 = (16 - ser_client_dh_inner_data.get_ref().len() % 16) % 16;
+
+        let rand_bytes = rng.gen_iter::<u8>().take(to_mod16 as usize).collect::<Vec<u8>>();
+        ser_client_dh_inner_data.write_all(&rand_bytes);
+
+
+        let aes_encrypt_key = openssl::aes::AesKey::new_encrypt(tmp_aes_key.get_ref()).unwrap();
+        let mut encrypted_data = vec![0u8; ser_client_dh_inner_data.get_ref().len()];
+
+        openssl::aes::aes_ige(ser_client_dh_inner_data.get_ref(), &mut encrypted_data, &aes_encrypt_key, tmp_aes_iv.get_mut(), openssl::symm::Mode::Encrypt);
+
+        let set_client_dh_params = functions::SetClientDHParams {
+            nonce: nonce.clone(),
+            server_nonce: server_nonce.clone(),
+            encrypted_data: encrypted_data,
+        };
+
+        let mut ser_set_client_dh_params = Cursor::new(Vec::new());
+
+        ser_set_client_dh_params.serialize(&set_client_dh_params).unwrap();
+
+        connection.send(ser_set_client_dh_params.get_ref());
+
+
+
+        // 7) Thereafter, auth_key equals pow(g, {ab}) mod dh_prime; on the server,
+        // it is computed as pow(g_b, a) mod dh_prime, and on the client as (g_a)^b mod dh_prime.
+
+        let mut auth_key = BigNum::new().unwrap();
+        let mut ctx = BigNumContext::new().unwrap();
+        auth_key.mod_exp(g_a.deref(), b.deref(), dh_prime.deref(), &mut ctx).unwrap();
+
+
+
+        // 8) auth_key_hash is computed := 64 lower-order bits of SHA1 (auth_key).
+        // The server checks whether there already is another key with the same auth_key_hash
+        // and responds in one of the following ways.
+
+
+        // DH key exchange complete
+        // 9) Server responds in one of three ways:
+
+        // dh_gen_ok#3bcbf734 nonce:int128 server_nonce:int128 new_nonce_hash1:int128 = Set_client_DH_params_answer;
+        // dh_gen_retry#46dc1fb9 nonce:int128 server_nonce:int128 new_nonce_hash2:int128 = Set_client_DH_params_answer;
+        // dh_gen_fail#a69dae02 nonce:int128 server_nonce:int128 new_nonce_hash3:int128 = Set_client_DH_params_answer;
+
+        let mut set_client_dh_params_answer_data = Cursor::new(connection.receive().unwrap());
+        
+        let set_client_dh_params_answer: constructors::SetClientDHParamsAnswer = message_data.deserialize(0).unwrap();
+        
+        println!("{:?}", set_client_dh_params_answer);
+
     }
 
     #[test]
@@ -596,6 +763,15 @@ mod tests {
 
         let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
         let start = (0x0001020304050607, 0x08090A0B0C0D0E0F);
+
+
+        let mut start_bytes = vec![0u8; 16];
+        BigEndian::write_u64(&mut start_bytes[0..8], start.0);
+        BigEndian::write_u64(&mut start_bytes[8..16], start.1);
+
+        println!("{}", dump_bytes(&start_bytes).unwrap());
+
+
 
         buf.serialize(&start).unwrap();
         println!("{:?}", buf.get_ref());
