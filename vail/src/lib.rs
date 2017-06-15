@@ -16,12 +16,15 @@ use std::io;
 use std::io::{Write, Read, Cursor};
 use std::ops::Deref;
 
+use rand::Rng;
 
 use std::net::{TcpStream, ToSocketAddrs};
-// use deserialize::Deserializer;
+use serialize::Serialize;
+use deserialize::Deserializer;
 
 use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian, ByteOrder, BigEndian};
 
+use std::env;
 
 mod constructors;
 mod functions;
@@ -66,8 +69,10 @@ pub struct MtProtoConnection {
     pub conn: TcpStream,
     connected: bool,
     encrypted: bool,
-    msg_ig_offset: i64,
-    seq_num: i32,
+    time_offset: i64,
+    seq_no: i32,
+    auth_key: BigNum,
+    server_salt: u64,
 }
 
 fn dump_bytes(buf: &[u8]) -> Result<String, std::fmt::Error> {
@@ -140,8 +145,10 @@ impl MtProtoConnection {
             conn: connection,
             connected: false,
             encrypted: encrypted,
-            msg_ig_offset: 0,
-            seq_num: 0,
+            time_offset: 0,
+            seq_no: 0,
+            auth_key: BigNum::new().unwrap(),
+            server_salt: 0,
         })
     }
 
@@ -152,8 +159,10 @@ impl MtProtoConnection {
             conn: connection,
             connected: false,
             encrypted: encrypted,
-            msg_ig_offset: 0,
-            seq_num: 0,
+            time_offset: 0,
+            seq_no: 0,
+            auth_key: BigNum::new().unwrap(),
+            server_salt: 0,
         })
     }
 
@@ -168,10 +177,11 @@ impl MtProtoConnection {
             let mut buffer = Cursor::new(Vec::new());
 
             buffer.write_i32::<LittleEndian>((4 + 4 + (8 + 8 + 4 + message_data.len()) + 4) as i32)?;
-            // length of everything. length, seq_num, auth_key_id, message_id,
+            // length of everything. length, seq_no, auth_key_id, message_id,
             // message_data_length, message_data, crc32
-            buffer.write_i32::<LittleEndian>(self.seq_num)?;
-            self.seq_num += 1;
+
+            buffer.write_i32::<LittleEndian>(self.seq_no)?;
+            self.seq_no += 1;
 
             let msg_id = self.get_msg_id();
 
@@ -188,7 +198,7 @@ impl MtProtoConnection {
             self.conn.write_all(buffer.get_ref())?;
         }
 
-        self.conn.flush();
+        self.conn.flush()?;
         Ok(())
     }
 
@@ -197,16 +207,23 @@ impl MtProtoConnection {
             unimplemented!();
         } else {
             let buf_size = self.conn.read_i32::<LittleEndian>()?;
-            let seq_num = self.conn.read_i32::<LittleEndian>()?;
+            let seq_no = self.conn.read_i32::<LittleEndian>()?;
+
+            println!("\nSTART RECEIVE DEBUG");
+
+            println!("buf_size: {}", buf_size);
+            println!("seq_no: {}", seq_no);
 
             let mut buffer = vec![0; buf_size as usize - 12];
             self.conn.read_exact(buffer.as_mut_slice())?;
+            println!("recv_buf: {}", dump_bytes(&buffer).unwrap());
 
             let received_checksum = self.conn.read_u32::<LittleEndian>()?;
+            println!("received_checksum: 0x{:08x}", received_checksum);
 
             let mut digest = crc32::Digest::new(crc32::IEEE);
             digest.write(&i32_to_bytes(buf_size));
-            digest.write(&i32_to_bytes(seq_num));
+            digest.write(&i32_to_bytes(seq_no));
             digest.write(buffer.as_ref());
 
             let calculated_checksum = digest.sum32();
@@ -215,17 +232,24 @@ impl MtProtoConnection {
                 panic!("Placeholder error, checksums are not ok");
             }
 
-
             let mut buf = Cursor::new(buffer);
 
             let auth_key_id = buf.read_i64::<LittleEndian>()?;
+            println!("auth_key_id: 0x{:016x}", auth_key_id);
+
             let message_id = buf.read_i64::<LittleEndian>()?;
+            println!("message_id: 0x{:016x}", message_id);
+
             let message_data_length = buf.read_i32::<LittleEndian>()?;
+            println!("message_data_length: {}", message_data_length);
 
 
             let mut message_data = vec![0; message_data_length as usize];
             buf.read_exact(message_data.as_mut_slice())?;
 
+            println!("message_data: {}", dump_bytes(&message_data).unwrap());
+
+            println!("END RECEIVE DEBUG\n");
             Ok(message_data)
         }
     }
@@ -233,34 +257,25 @@ impl MtProtoConnection {
     fn get_msg_id(&self) -> i64 {
         let current_time = time::get_time();
 
-        return current_time.sec << 32 | (current_time.nsec as i64) << 2;
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    extern crate rand;
-
-    use rand::Rng;
-    use deserialize::Deserializer;
-    use serialize::Serialize;
-    use std::io::Cursor;
-    use super::*;
-
-    #[test]
-    fn time() {
-        let current_time = time::get_time();
-
-        let msg_id = current_time.sec << 32 | (current_time.nsec as i64) << 2;
-
-        println!("0x{:x}", msg_id);
+        return (current_time.sec + self.time_offset) << 32 | (current_time.nsec as i64) << 2;
     }
 
-    #[test]
-    fn authenticate() {
-        use std::io::Read;
-        use rand::Rng;
+    fn get_seq_no(&mut self, content_related: bool) -> i32 {
+        if content_related {
+            let res = self.seq_no * 2 + 1;
+            self.seq_no += 1;
+
+            res
+        } else {
+            self.seq_no * 2
+        }
+    }
+
+    fn set_time_offset(&mut self, offset: i64) {
+        self.time_offset = offset;
+    }
+
+    fn authenticate(&mut self) -> Result<(), io::Error> {
 
         fn ser_and_hash<T>(buf: &mut Cursor<Vec<u8>>, obj: &T) -> Result<(), io::Error> where Cursor<Vec<u8>>: Serialize<T> {
             let start_pos = buf.position();
@@ -285,7 +300,6 @@ mod tests {
         // ﻿Creating an Authorization Key
         // https://core.telegram.org/mtproto/auth_key
 
-        let mut connection = MtProtoConnection::new(false).unwrap();
         let mut rng = rand::thread_rng();
         let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
@@ -301,31 +315,31 @@ mod tests {
 
         buf.serialize(&request).unwrap();
 
-        connection.send(buf.get_ref());
+        self.send(buf.get_ref())?;
 
         // logs
         
-        // let req_pq_dump = dump_bytes(buf.get_ref()).unwrap();
+        let req_pq_dump = dump_bytes(buf.get_ref()).unwrap();
         
-        // println!("{}", req_pq_dump);
-        // println!("{:#?}", request);
+        println!("{}", req_pq_dump);
+        println!("{:#?}", request);
 
 
 
         // 2) Server sends response of the form
         // resPQ#05162463 nonce:int128 server_nonce:int128 pq:string server_public_key_fingerprints:Vector long = ResPQ
         
-        let mut message_data = Cursor::new(connection.receive().unwrap());
+        let mut message_data = Cursor::new(self.receive()?);
         
-        let res_pq: constructors::ResPQ = message_data.deserialize(0).unwrap();
+        let res_pq: constructors::ResPQ = message_data.deserialize(0)?;
         let server_nonce = res_pq.server_nonce;
         
         // logs
 
-        // let res_pq_dump = dump_bytes(message_data.get_ref()).unwrap();
+        let res_pq_dump = dump_bytes(message_data.get_ref()).unwrap();
         
-        // println!("{}", res_pq_dump);
-        // println!("{:#?}", res_pq);
+        println!("{}", res_pq_dump);
+        println!("{:#?}", res_pq);
 
 
 
@@ -336,7 +350,7 @@ mod tests {
 
         // logs
 
-        // println!("p:{}\nq:{}", p, q);
+        println!("p:{}\nq:{}", p, q);
 
 
 
@@ -361,22 +375,22 @@ mod tests {
         };
 
         let mut ser_p_q_inner_data = Cursor::new(Vec::new());
-        ser_and_hash(&mut ser_p_q_inner_data, &p_q_inner_data);
+        ser_and_hash(&mut ser_p_q_inner_data, &p_q_inner_data)?;
 
         let mut rng = rand::thread_rng();
         let rand_bytes = rng.gen_iter::<u8>().take(255 - ser_p_q_inner_data.position() as usize).collect::<Vec<u8>>();
-        ser_p_q_inner_data.write_all(&rand_bytes);
+        ser_p_q_inner_data.write_all(&rand_bytes)?;
 
         // logs
         // let p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()[20..return_position as usize]).unwrap();
-        // let full_p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()).unwrap();
+        let full_p_q_inner_data_dump = dump_bytes(&ser_p_q_inner_data.get_ref()).unwrap();
         
         // println!("p_q_inner_data_dump: {}", p_q_inner_data_dump);
-        // println!("full_p_q_inner_data_dump: {}", full_p_q_inner_data_dump);
-        // println!("pq: {:?}", p_q_inner_data.pq);
-        // println!("q: {:?}", q_bytes);
-        // println!("p: {:?}", p_bytes);
-        // println!("p_q_inner_data: {:#?}", p_q_inner_data);
+        println!("full_p_q_inner_data_dump: {}", full_p_q_inner_data_dump);
+        println!("pq: {:?}", p_q_inner_data.pq);
+        println!("q: {:?}", q_bytes);
+        println!("p: {:?}", p_bytes);
+        println!("p_q_inner_data: {:#?}", p_q_inner_data);
 
         let rsa_key_bytes = String::from("-----BEGIN PUBLIC KEY-----\n\
         MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwVACPi9w23mF3tBkdZz+\n\
@@ -400,7 +414,7 @@ mod tests {
         res.mod_exp(base.deref(), e, n, &mut ctx).unwrap();
 
 
-        let mut encrypted_data = res.to_vec();
+        let encrypted_data = res.to_vec();
 
         println!("encrypted_data:{}", dump_bytes(encrypted_data.as_ref()).unwrap());
 
@@ -416,9 +430,9 @@ mod tests {
 
         let mut ser_req_dh_params: Cursor<Vec<u8>> = Cursor::new(Vec::new());
 
-        ser_req_dh_params.serialize(&req_dh_params).unwrap();
+        ser_req_dh_params.serialize(&req_dh_params)?;
 
-        connection.send(ser_req_dh_params.get_ref());
+        self.send(ser_req_dh_params.get_ref())?;
 
         // logs
 
@@ -433,9 +447,9 @@ mod tests {
         // server_DH_params_fail#79cb045d nonce:int128 server_nonce:int128 new_nonce_hash:int128 = Server_DH_Params;
         // server_DH_params_ok#d0e8075c nonce:int128 server_nonce:int128 encrypted_answer:string = Server_DH_Params;
 
-        let mut message_data = Cursor::new(connection.receive().unwrap());
+        let mut message_data = Cursor::new(self.receive()?);
         
-        let server_dh_params: constructors::ServerDHParams = message_data.deserialize(0).unwrap();
+        let server_dh_params: constructors::ServerDHParams = message_data.deserialize(0)?;
         
         
         // logs
@@ -488,13 +502,13 @@ mod tests {
 
 
         let mut tmp_aes_key = Cursor::new(Vec::with_capacity(32));
-        tmp_aes_key.write_all(&new_nonce_server_nonce_hash);
-        tmp_aes_key.write_all(&server_nonce_new_nonce_hash[0..12]);
+        tmp_aes_key.write_all(&new_nonce_server_nonce_hash)?;
+        tmp_aes_key.write_all(&server_nonce_new_nonce_hash[0..12])?;
 
         let mut tmp_aes_iv = Cursor::new(Vec::with_capacity(32));
-        tmp_aes_iv.write_all(&server_nonce_new_nonce_hash[12..20]);
-        tmp_aes_iv.write_all(&new_nonce_new_nonce_hash);
-        tmp_aes_iv.write_all(&new_nonce_bytes[0..4]);
+        tmp_aes_iv.write_all(&server_nonce_new_nonce_hash[12..20])?;
+        tmp_aes_iv.write_all(&new_nonce_new_nonce_hash)?;
+        tmp_aes_iv.write_all(&new_nonce_bytes[0..4])?;
 
 
         // logs
@@ -511,7 +525,7 @@ mod tests {
         let mut answer = Cursor::new(decrypted_answer);
 
         answer.set_position(20); // Don't skip the sha1, verify it
-        let server_dh_inner_data: constructors::ServerDHInnerData = answer.deserialize(0).unwrap();
+        let server_dh_inner_data: constructors::ServerDHInnerData = answer.deserialize(0)?;
 
         // logs
 
@@ -520,6 +534,11 @@ mod tests {
         println!("answer dump: {}", answer_dump);
         println!("server_dh_inner_data: {:?}", &server_dh_inner_data);
 
+        let now = time::get_time();
+        println!("server_time: {}", &server_dh_inner_data.server_time);
+        println!("now: {}.{}", now.sec, now.nsec);
+        println!("now - server: {}.{}", now.sec - server_dh_inner_data.server_time as i64, now.nsec);
+        self.set_time_offset(now.sec - server_dh_inner_data.server_time as i64);
 
 
         // 6) Client computes random 2048-bit number b (using a sufficient amount of entropy) and sends the server a message
@@ -530,7 +549,7 @@ mod tests {
         let g_a = BigNum::from_slice(&server_dh_inner_data.g_a).unwrap();
 
         let mut b = BigNum::new().unwrap();
-        b.rand(2048, openssl::bn::MSB_MAYBE_ZERO, true).unwrap();
+        b.rand(2048, openssl::bn::MSB_ONE, true).unwrap();
 
         let mut g_b = BigNum::new().unwrap();
         let mut ctx = BigNumContext::new().unwrap();
@@ -545,12 +564,12 @@ mod tests {
         };
 
         let mut ser_client_dh_inner_data = Cursor::new(Vec::new());
-        ser_and_hash(&mut ser_client_dh_inner_data, &client_dh_inner_data);
+        ser_and_hash(&mut ser_client_dh_inner_data, &client_dh_inner_data)?;
 
         let to_mod16 = (16 - ser_client_dh_inner_data.get_ref().len() % 16) % 16;
 
         let rand_bytes = rng.gen_iter::<u8>().take(to_mod16 as usize).collect::<Vec<u8>>();
-        ser_client_dh_inner_data.write_all(&rand_bytes);
+        ser_client_dh_inner_data.write_all(&rand_bytes)?;
 
 
         let aes_encrypt_key = openssl::aes::AesKey::new_encrypt(tmp_aes_key.get_ref()).unwrap();
@@ -566,10 +585,20 @@ mod tests {
 
         let mut ser_set_client_dh_params = Cursor::new(Vec::new());
 
-        ser_set_client_dh_params.serialize(&set_client_dh_params).unwrap();
+        ser_set_client_dh_params.serialize(&set_client_dh_params)?;
 
-        connection.send(ser_set_client_dh_params.get_ref());
+        self.send(ser_set_client_dh_params.get_ref())?;
 
+        //logs
+
+        let client_dh_inner_data_dump = dump_bytes(ser_client_dh_inner_data.get_ref()).unwrap();
+        let set_client_dh_params_dump = dump_bytes(ser_set_client_dh_params.get_ref()).unwrap();
+        
+        println!("client_dh_inner_data: {:?}", &client_dh_inner_data);
+        println!("client_dh_inner_data_dump: {}", client_dh_inner_data_dump);
+
+        println!("set_client_dh_params: {:?}", &set_client_dh_params);
+        println!("set_client_dh_params_dump: {}", set_client_dh_params_dump);
 
 
         // 7) Thereafter, auth_key equals pow(g, {ab}) mod dh_prime; on the server,
@@ -593,12 +622,55 @@ mod tests {
         // dh_gen_retry#46dc1fb9 nonce:int128 server_nonce:int128 new_nonce_hash2:int128 = Set_client_DH_params_answer;
         // dh_gen_fail#a69dae02 nonce:int128 server_nonce:int128 new_nonce_hash3:int128 = Set_client_DH_params_answer;
 
-        let mut set_client_dh_params_answer_data = Cursor::new(connection.receive().unwrap());
+        let mut set_client_dh_params_answer_data = Cursor::new(self.receive()?);
+        println!("set_client_dh_params_answer_data: {:?}", set_client_dh_params_answer_data);
         
-        let set_client_dh_params_answer: constructors::SetClientDHParamsAnswer = message_data.deserialize(0).unwrap();
+        let set_client_dh_params_answer: constructors::SetClientDHParamsAnswer = set_client_dh_params_answer_data.deserialize(0)?;
         
         println!("{:?}", set_client_dh_params_answer);
 
+        match set_client_dh_params_answer {
+            constructors::SetClientDHParamsAnswer::DhGenOk {
+                nonce, server_nonce, new_nonce_hash1
+            } => {
+                self.session_id = rng.gen::<u64>();
+                self.salt = new_nonce.0 & server_nonce.0;
+                // We good, save some variables
+            }, 
+            
+            constructors::SetClientDHParamsAnswer::DhGenRetry {
+                nonce, server_nonce, new_nonce_hash2
+            } => {
+                // devise some way to retry correctly
+            },
+
+            constructors::SetClientDHParamsAnswer::DhGenFail {
+                nonce, server_nonce, new_nonce_hash3
+            } => {
+                // lol u messed up
+            },
+        }
+
+        Ok(())
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    extern crate rand;
+
+    use rand::Rng;
+    use deserialize::Deserializer;
+    use serialize::Serialize;
+    use std::io::Cursor;
+    use super::*;
+
+
+    #[test]
+    fn authenticate() {
+        let mut connection = MtProtoConnection::new(false).unwrap();
+        connection.authenticate().unwrap();
     }
 
     #[test]
