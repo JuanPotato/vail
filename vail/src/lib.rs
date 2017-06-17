@@ -70,9 +70,12 @@ pub struct MtProtoConnection {
     connected: bool,
     encrypted: bool,
     time_offset: i64,
-    seq_no: i32,
-    auth_key: BigNum,
+    packet_seq_no: i32,
+    message_seq_no: i32,
+    auth_key: Vec<u8>,
     server_salt: u64,
+    session_id: i64,
+    auth_key_id: i64,
 }
 
 fn dump_bytes(buf: &[u8]) -> Result<String, std::fmt::Error> {
@@ -136,7 +139,6 @@ fn i32_to_bytes(num: i32) -> [u8; 4] {
 //     [num as u8, (num >> 8) as u8, (num >> 16) as u8, (num >> 24) as u8, (num >> 32) as u8, (num >> 40) as u8, (num >> 48) as u8, (num >> 56) as u8]
 // }
 
-
 impl MtProtoConnection {
     fn new(encrypted: bool) -> Result<MtProtoConnection, io::Error> {
         let connection = TcpStream::connect("91.108.56.165:443")?;
@@ -146,9 +148,12 @@ impl MtProtoConnection {
             connected: false,
             encrypted: encrypted,
             time_offset: 0,
-            seq_no: 0,
-            auth_key: BigNum::new().unwrap(),
+            packet_seq_no: 0,
+            message_seq_no: 0,
+            auth_key: Vec::new(),
             server_salt: 0,
+            session_id: 0,
+            auth_key_id: 0,
         })
     }
 
@@ -160,9 +165,12 @@ impl MtProtoConnection {
             connected: false,
             encrypted: encrypted,
             time_offset: 0,
-            seq_no: 0,
-            auth_key: BigNum::new().unwrap(),
+            packet_seq_no: 0,
+            message_seq_no: 0,
+            auth_key: Vec::new(),
             server_salt: 0,
+            session_id: 0,
+            auth_key_id: 0,
         })
     }
 
@@ -172,16 +180,85 @@ impl MtProtoConnection {
 
     fn send(&mut self, message_data: &[u8]) -> Result<(), io::Error> {
         if self.encrypted {
-            unimplemented!();
+            let mut buffer = Cursor::new(Vec::new());
+
+            let to_encrypt_length = 8 + 8 + 8 + 4 + 4 + message_data.len();
+            let to_mod16 = (16 - to_encrypt_length % 16) % 16;
+
+            buffer.write_i32::<LittleEndian>(
+                (4 + 4 +
+                    (8 + 16 + to_encrypt_length + to_mod16) +
+                4)
+            as i32)?;
+            // length of everything.
+            // length, packet_seq_no
+                // auth_key_id, msg_key, server_salt, session_id, message_id, msg_seq_no, message_data_length, message_data, padding
+            // crc32
+
+            buffer.write_i32::<LittleEndian>(self.packet_seq_no)?;
+            self.packet_seq_no += 1;
+
+            let msg_id = self.get_msg_id();
+
+
+            let mut to_encrypt_buf = Cursor::new(Vec::with_capacity(to_encrypt_length + to_mod16));
+
+            to_encrypt_buf.write_u64::<LittleEndian>(self.server_salt)?; // server_salt; int64
+            to_encrypt_buf.write_i64::<LittleEndian>(self.session_id)?; // session_id; int64
+            to_encrypt_buf.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
+            to_encrypt_buf.write_i32::<LittleEndian>(self.get_msg_seq_no(true))?; // FIXME
+            to_encrypt_buf.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
+            to_encrypt_buf.write_all(message_data)?; // message_data; bytes
+
+
+            let mut hasher = sha1::Sha1::new();
+
+            hasher.update(to_encrypt_buf.get_ref());
+            let to_encrypt_hash = hasher.digest().bytes();
+            let mut msg_key = to_encrypt_hash[4..20].to_vec();
+            msg_key.reverse();
+
+
+            let mut rng = rand::thread_rng();
+
+            let rand_bytes = rng.gen_iter::<u8>().take(to_mod16 as usize).collect::<Vec<u8>>();
+            to_encrypt_buf.write_all(&rand_bytes)?;
+
+
+            let (aes_key, mut aes_iv) = self.get_key_iv(&msg_key, true);
+
+            let aes_encrypt_key = openssl::aes::AesKey::new_encrypt(&aes_key).unwrap();
+            let mut encrypted_data = vec![0u8; to_encrypt_buf.get_ref().len()];
+
+            openssl::aes::aes_ige(&to_encrypt_buf.get_ref(), &mut encrypted_data, &aes_encrypt_key, &mut aes_iv, openssl::symm::Mode::Encrypt);
+
+
+            buffer.write_i64::<LittleEndian>(self.auth_key_id)?; // auth_key_id; int64
+            buffer.write_all(&msg_key)?;
+            buffer.write_all(&encrypted_data)?;
+
+            let mut digest = crc32::Digest::new(crc32::IEEE);
+            digest.write(buffer.get_ref());
+            
+            buffer.write_u32::<LittleEndian>(digest.sum32())?;
+
+            self.conn.write_all(buffer.get_ref())?;
         } else {
             let mut buffer = Cursor::new(Vec::new());
 
-            buffer.write_i32::<LittleEndian>((4 + 4 + (8 + 8 + 4 + message_data.len()) + 4) as i32)?;
-            // length of everything. length, seq_no, auth_key_id, message_id,
-            // message_data_length, message_data, crc32
+            buffer.write_i32::<LittleEndian>(
+                (4 + 4 +
+                    (8 + 8 + 4 + message_data.len()) +
+                4)
+            as i32)?;
 
-            buffer.write_i32::<LittleEndian>(self.seq_no)?;
-            self.seq_no += 1;
+            // length of everything.
+            // length, packet_seq_no
+                // auth_key_id, message_id, message_data_length, message_data
+            // crc32
+
+            buffer.write_i32::<LittleEndian>(self.packet_seq_no)?;
+            self.packet_seq_no += 1;
 
             let msg_id = self.get_msg_id();
 
@@ -189,7 +266,7 @@ impl MtProtoConnection {
             buffer.write_i64::<LittleEndian>(msg_id)?; // message_id; int64
             buffer.write_i32::<LittleEndian>(message_data.len() as i32)?; // message_data_length; i32
             buffer.write_all(message_data)?; // message_data; bytes
-            
+
             let mut digest = crc32::Digest::new(crc32::IEEE);
             digest.write(buffer.get_ref());
             
@@ -203,35 +280,76 @@ impl MtProtoConnection {
     }
 
     fn receive(&mut self) -> Result<Vec<u8>, io::Error> {
+        let buf_size = self.conn.read_i32::<LittleEndian>()?;
+        let seq_no = self.conn.read_i32::<LittleEndian>()?;
+
+        println!("\nSTART RECEIVE DEBUG");
+
+        println!("buf_size: {}", buf_size);
+        println!("seq_no: {}", seq_no);
+
+        let mut buffer = vec![0; buf_size as usize - 12];
+        self.conn.read_exact(buffer.as_mut_slice())?;
+        println!("recv_buf: {}", dump_bytes(&buffer).unwrap());
+
+        let received_checksum = self.conn.read_u32::<LittleEndian>()?;
+        println!("received_checksum: 0x{:08x}", received_checksum);
+
+        let mut digest = crc32::Digest::new(crc32::IEEE);
+        digest.write(&i32_to_bytes(buf_size));
+        digest.write(&i32_to_bytes(seq_no));
+        digest.write(buffer.as_ref());
+
+        let calculated_checksum = digest.sum32();
+
+        if received_checksum != calculated_checksum {
+            panic!("Placeholder error, checksums are not ok");
+        }
+
         if self.encrypted {
-            unimplemented!();
+            let mut buf = Cursor::new(buffer);
+
+            let auth_key_id = buf.read_i64::<LittleEndian>()?;
+            println!("auth_key_id: 0x{:016x}", auth_key_id);
+
+            let mut msg_key = vec![0; 16];
+            buf.read_exact(&mut msg_key)?;
+
+            let (aes_key, mut aes_iv) = self.get_key_iv(&msg_key, false);
+
+            let aes_decrypt_key = openssl::aes::AesKey::new_decrypt(&aes_key).unwrap();
+            let mut decrypted_data = vec![0u8; buf.get_ref()[24..].len()];
+
+            openssl::aes::aes_ige(&buf.get_ref()[24..] , &mut decrypted_data, &aes_decrypt_key, &mut aes_iv, openssl::symm::Mode::Decrypt);
+
+
+            let mut decrypted_buffer = Cursor::new(decrypted_data);
+
+            let server_salt = decrypted_buffer.read_u64::<LittleEndian>()?;
+            println!("server_salt: 0x{:016x}", server_salt);
+
+            let session_id = decrypted_buffer.read_i64::<LittleEndian>()?;
+            println!("session_id: 0x{:016x}", session_id);
+
+            let message_id = decrypted_buffer.read_i64::<LittleEndian>()?;
+            println!("message_id: 0x{:016x}", message_id);
+
+            let seq_no = decrypted_buffer.read_i32::<LittleEndian>()?;
+            println!("seq_no: 0x{:08x}", seq_no);
+
+            let message_data_length = decrypted_buffer.read_i32::<LittleEndian>()?;
+            println!("message_data_length: {}", message_data_length);
+
+            let pos = decrypted_buffer.position();
+            let mut message_data = vec![0u8; message_data_length as usize];
+            decrypted_buffer.read_exact(&mut message_data);
+
+            println!("message_data: {}", dump_bytes(&message_data).unwrap());
+
+            println!("END RECEIVE DEBUG\n");
+
+            Ok(message_data)
         } else {
-            let buf_size = self.conn.read_i32::<LittleEndian>()?;
-            let seq_no = self.conn.read_i32::<LittleEndian>()?;
-
-            println!("\nSTART RECEIVE DEBUG");
-
-            println!("buf_size: {}", buf_size);
-            println!("seq_no: {}", seq_no);
-
-            let mut buffer = vec![0; buf_size as usize - 12];
-            self.conn.read_exact(buffer.as_mut_slice())?;
-            println!("recv_buf: {}", dump_bytes(&buffer).unwrap());
-
-            let received_checksum = self.conn.read_u32::<LittleEndian>()?;
-            println!("received_checksum: 0x{:08x}", received_checksum);
-
-            let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&i32_to_bytes(buf_size));
-            digest.write(&i32_to_bytes(seq_no));
-            digest.write(buffer.as_ref());
-
-            let calculated_checksum = digest.sum32();
-
-            if received_checksum != calculated_checksum {
-                panic!("Placeholder error, checksums are not ok");
-            }
-
             let mut buf = Cursor::new(buffer);
 
             let auth_key_id = buf.read_i64::<LittleEndian>()?;
@@ -250,8 +368,50 @@ impl MtProtoConnection {
             println!("message_data: {}", dump_bytes(&message_data).unwrap());
 
             println!("END RECEIVE DEBUG\n");
+
             Ok(message_data)
         }
+    }
+
+    fn get_key_iv(&self, msg_key: &[u8], encrypt: bool) -> (Vec<u8>, Vec<u8>) {
+        let x = if encrypt { 0 } else { 8 };
+
+        let mut hasher = sha1::Sha1::new();
+
+
+        hasher.update(msg_key);
+        hasher.update(&self.auth_key[x..x+32]);
+        let sha1_a = hasher.digest().bytes();
+
+        hasher.reset();
+        hasher.update(&self.auth_key[x+32..x+32+16]);
+        hasher.update(msg_key);
+        hasher.update(&self.auth_key[x+48..x+48+16]);
+        let sha1_b = hasher.digest().bytes();
+
+        hasher.reset();
+        hasher.update(&self.auth_key[x+64..x+64+32]);
+        hasher.update(msg_key);
+        let sha1_c = hasher.digest().bytes();
+
+        hasher.reset();
+        hasher.update(msg_key);
+        hasher.update(&self.auth_key[x+96..x+96+32]);
+        let sha1_d = hasher.digest().bytes();
+
+
+        let mut aes_key = Vec::with_capacity(32);
+        aes_key.extend_from_slice(&sha1_a[0..8]);
+        aes_key.extend_from_slice(&sha1_b[8..20]);
+        aes_key.extend_from_slice(&sha1_c[4..20]);
+
+        let mut aes_iv = Vec::with_capacity(32);
+        aes_iv.extend_from_slice(&sha1_a[8..20]);
+        aes_iv.extend_from_slice(&sha1_b[0..8]);
+        aes_iv.extend_from_slice(&sha1_c[16..20]);
+        aes_iv.extend_from_slice(&sha1_d[0..8]);
+
+        (aes_key, aes_iv)
     }
 
     fn get_msg_id(&self) -> i64 {
@@ -260,14 +420,14 @@ impl MtProtoConnection {
         return (current_time.sec + self.time_offset) << 32 | (current_time.nsec as i64) << 2;
     }
 
-    fn get_seq_no(&mut self, content_related: bool) -> i32 {
+    fn get_msg_seq_no(&mut self, content_related: bool) -> i32 {
         if content_related {
-            let res = self.seq_no * 2 + 1;
-            self.seq_no += 1;
+            let res = self.message_seq_no * 2 + 1;
+            self.message_seq_no += 1;
 
             res
         } else {
-            self.seq_no * 2
+            self.message_seq_no * 2
         }
     }
 
@@ -377,7 +537,6 @@ impl MtProtoConnection {
         let mut ser_p_q_inner_data = Cursor::new(Vec::new());
         ser_and_hash(&mut ser_p_q_inner_data, &p_q_inner_data)?;
 
-        let mut rng = rand::thread_rng();
         let rand_bytes = rng.gen_iter::<u8>().take(255 - ser_p_q_inner_data.position() as usize).collect::<Vec<u8>>();
         ser_p_q_inner_data.write_all(&rand_bytes)?;
 
@@ -501,26 +660,26 @@ impl MtProtoConnection {
         println!("new_nonce_new_nonce_hash: {}", dump_bytes(&new_nonce_new_nonce_hash).unwrap());
 
 
-        let mut tmp_aes_key = Cursor::new(Vec::with_capacity(32));
-        tmp_aes_key.write_all(&new_nonce_server_nonce_hash)?;
-        tmp_aes_key.write_all(&server_nonce_new_nonce_hash[0..12])?;
+        let mut tmp_aes_key = Vec::with_capacity(32);
+        tmp_aes_key.extend_from_slice(&new_nonce_server_nonce_hash);
+        tmp_aes_key.extend_from_slice(&server_nonce_new_nonce_hash[0..12]);
 
-        let mut tmp_aes_iv = Cursor::new(Vec::with_capacity(32));
-        tmp_aes_iv.write_all(&server_nonce_new_nonce_hash[12..20])?;
-        tmp_aes_iv.write_all(&new_nonce_new_nonce_hash)?;
-        tmp_aes_iv.write_all(&new_nonce_bytes[0..4])?;
+        let mut tmp_aes_iv = Vec::with_capacity(32);
+        tmp_aes_iv.extend_from_slice(&server_nonce_new_nonce_hash[12..20]);
+        tmp_aes_iv.extend_from_slice(&new_nonce_new_nonce_hash);
+        tmp_aes_iv.extend_from_slice(&new_nonce_bytes[0..4]);
 
 
         // logs
         println!("");
-        println!("tmp_aes_key: {}", dump_bytes(tmp_aes_key.get_ref()).unwrap());
-        println!("tmp_aes_iv: {}", dump_bytes(tmp_aes_iv.get_ref()).unwrap());
+        println!("tmp_aes_key: {}", dump_bytes(&tmp_aes_key).unwrap());
+        println!("tmp_aes_iv: {}", dump_bytes(&tmp_aes_iv).unwrap());
 
-        let aes_decrypt_key = openssl::aes::AesKey::new_decrypt(tmp_aes_key.get_ref()).unwrap();
+        let aes_decrypt_key = openssl::aes::AesKey::new_decrypt(&tmp_aes_key).unwrap();
         let mut decrypted_answer = vec![0u8; encrypted_answer.len()];
 
         let mut iv = tmp_aes_iv.clone();
-        openssl::aes::aes_ige(&encrypted_answer, &mut decrypted_answer, &aes_decrypt_key, iv.get_mut(), openssl::symm::Mode::Decrypt);
+        openssl::aes::aes_ige(&encrypted_answer, &mut decrypted_answer, &aes_decrypt_key, &mut iv, openssl::symm::Mode::Decrypt);
 
         let mut answer = Cursor::new(decrypted_answer);
 
@@ -572,10 +731,10 @@ impl MtProtoConnection {
         ser_client_dh_inner_data.write_all(&rand_bytes)?;
 
 
-        let aes_encrypt_key = openssl::aes::AesKey::new_encrypt(tmp_aes_key.get_ref()).unwrap();
+        let aes_encrypt_key = openssl::aes::AesKey::new_encrypt(&tmp_aes_key).unwrap();
         let mut encrypted_data = vec![0u8; ser_client_dh_inner_data.get_ref().len()];
 
-        openssl::aes::aes_ige(ser_client_dh_inner_data.get_ref(), &mut encrypted_data, &aes_encrypt_key, tmp_aes_iv.get_mut(), openssl::symm::Mode::Encrypt);
+        openssl::aes::aes_ige(ser_client_dh_inner_data.get_ref(), &mut encrypted_data, &aes_encrypt_key, &mut tmp_aes_iv, openssl::symm::Mode::Encrypt);
 
         let set_client_dh_params = functions::SetClientDHParams {
             nonce: nonce.clone(),
@@ -633,8 +792,16 @@ impl MtProtoConnection {
             constructors::SetClientDHParamsAnswer::DhGenOk {
                 nonce, server_nonce, new_nonce_hash1
             } => {
-                self.session_id = rng.gen::<u64>();
-                self.salt = new_nonce.0 & server_nonce.0;
+                self.session_id = rng.gen::<i64>();
+                self.server_salt = new_nonce.0 ^ server_nonce.0;
+                self.auth_key = auth_key.to_vec();
+
+                hasher.reset();
+                hasher.update(&self.auth_key);
+                let auth_key_hash = hasher.digest().bytes();
+
+                self.auth_key_id = BigEndian::read_i64(&auth_key_hash[12..20]);
+
                 // We good, save some variables
             }, 
             
