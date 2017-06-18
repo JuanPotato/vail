@@ -20,7 +20,7 @@ use rand::Rng;
 
 use std::net::{TcpStream, ToSocketAddrs};
 use serialize::Serialize;
-use deserialize::Deserializer;
+use deserialize::{Deserializer, Deserialize};
 
 use byteorder::{WriteBytesExt, ReadBytesExt, LittleEndian, ByteOrder, BigEndian};
 
@@ -373,6 +373,23 @@ impl MtProtoConnection {
         }
     }
 
+    fn send_obj<T>(&mut self, request: &T) -> Result<(), io::Error> where Cursor<Vec<u8>>: Serialize<T> {
+        let mut buf = Cursor::new(Vec::new());
+        buf.serialize(request)?;
+
+        self.send(buf.get_ref())?;
+
+        Ok(())
+    }
+
+    fn recv_obj<T>(&mut self) -> Result<T, io::Error> where Cursor<Vec<u8>>: Deserialize<T> {
+        let mut message_data = Cursor::new(self.receive()?);
+        
+        let object: T = message_data.deserialize(0)?;
+
+        Ok(object)
+    }
+
     fn get_key_iv(&self, msg_key: &[u8], encrypt: bool) -> (Vec<u8>, Vec<u8>) {
         let x = if encrypt { 0 } else { 8 };
 
@@ -401,15 +418,15 @@ impl MtProtoConnection {
 
 
         let mut aes_key = Vec::with_capacity(32);
-        aes_key.extend_from_slice(&sha1_a[0..8]);
-        aes_key.extend_from_slice(&sha1_b[8..20]);
-        aes_key.extend_from_slice(&sha1_c[4..20]);
+        aes_key.extend_from_slice(&sha1_a[0..0+8]);
+        aes_key.extend_from_slice(&sha1_b[8..8+12]);
+        aes_key.extend_from_slice(&sha1_c[4..4+12]);
 
         let mut aes_iv = Vec::with_capacity(32);
-        aes_iv.extend_from_slice(&sha1_a[8..20]);
-        aes_iv.extend_from_slice(&sha1_b[0..8]);
-        aes_iv.extend_from_slice(&sha1_c[16..20]);
-        aes_iv.extend_from_slice(&sha1_d[0..8]);
+        aes_iv.extend_from_slice(&sha1_a[8..8+12]);
+        aes_iv.extend_from_slice(&sha1_b[0..0+8]);
+        aes_iv.extend_from_slice(&sha1_c[16..16+4]);
+        aes_iv.extend_from_slice(&sha1_d[0..0+8]);
 
         (aes_key, aes_iv)
     }
@@ -461,8 +478,6 @@ impl MtProtoConnection {
         // https://core.telegram.org/mtproto/auth_key
 
         let mut rng = rand::thread_rng();
-        let mut buf: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-
 
         // 1) Client sends query to server
         // req_pq#60469778 nonce:int128 = ResPQ
@@ -473,15 +488,10 @@ impl MtProtoConnection {
             nonce: nonce.clone()
         };
 
-        buf.serialize(&request).unwrap();
-
-        self.send(buf.get_ref())?;
+        self.send_obj(&request)?;
 
         // logs
-        
-        let req_pq_dump = dump_bytes(buf.get_ref()).unwrap();
-        
-        println!("{}", req_pq_dump);
+
         println!("{:#?}", request);
 
 
@@ -489,16 +499,11 @@ impl MtProtoConnection {
         // 2) Server sends response of the form
         // resPQ#05162463 nonce:int128 server_nonce:int128 pq:string server_public_key_fingerprints:Vector long = ResPQ
         
-        let mut message_data = Cursor::new(self.receive()?);
-        
-        let res_pq: constructors::ResPQ = message_data.deserialize(0)?;
+        let res_pq = self.recv_obj::<constructors::ResPQ>()?;
         let server_nonce = res_pq.server_nonce;
         
         // logs
 
-        let res_pq_dump = dump_bytes(message_data.get_ref()).unwrap();
-        
-        println!("{}", res_pq_dump);
         println!("{:#?}", res_pq);
 
 
@@ -586,18 +591,10 @@ impl MtProtoConnection {
             encrypted_data: encrypted_data,
         };
 
-
-        let mut ser_req_dh_params: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-
-        ser_req_dh_params.serialize(&req_dh_params)?;
-
-        self.send(ser_req_dh_params.get_ref())?;
+        self.send_obj(&req_dh_params)?;
 
         // logs
 
-        let req_dh_params_dump = dump_bytes(ser_req_dh_params.get_ref()).unwrap();
-        
-        println!("req_dh_params_dump: {}", req_dh_params_dump);
         println!("req_dh_params: {:?}", req_dh_params);
 
 
@@ -606,22 +603,27 @@ impl MtProtoConnection {
         // server_DH_params_fail#79cb045d nonce:int128 server_nonce:int128 new_nonce_hash:int128 = Server_DH_Params;
         // server_DH_params_ok#d0e8075c nonce:int128 server_nonce:int128 encrypted_answer:string = Server_DH_Params;
 
-        let mut message_data = Cursor::new(self.receive()?);
-        
-        let server_dh_params: constructors::ServerDHParams = message_data.deserialize(0)?;
+        let server_dh_params = self.recv_obj::<constructors::ServerDHParams>()?;
         
         
         // logs
 
-        let server_dh_params_dump = dump_bytes(message_data.get_ref()).unwrap();
-        
-        println!("server_dh_params_dump: {}", server_dh_params_dump);
         println!("server_dh_params: {:?}", &server_dh_params);
 
 
-        let encrypted_answer = match server_dh_params {
-            constructors::ServerDHParams::Ok {encrypted_answer, ..} => encrypted_answer,
-            constructors::ServerDHParams::Fail { .. } => panic!("ServerDHParams failed, replace with real error"),
+        let encrypted_answer: Vec<u8> = match server_dh_params {
+            constructors::ServerDHParams::Ok {
+                nonce, server_nonce, encrypted_answer
+            } => {
+                // if 
+                encrypted_answer
+            },
+
+            constructors::ServerDHParams::Fail {
+                nonce, server_nonce, new_nonce_hash
+            } => {
+                panic!("ServerDHParams failed, replace with real error")
+            }
         };
 
 
@@ -742,22 +744,13 @@ impl MtProtoConnection {
             encrypted_data: encrypted_data,
         };
 
-        let mut ser_set_client_dh_params = Cursor::new(Vec::new());
-
-        ser_set_client_dh_params.serialize(&set_client_dh_params)?;
-
-        self.send(ser_set_client_dh_params.get_ref())?;
+        self.send_obj(&set_client_dh_params)?;
 
         //logs
 
-        let client_dh_inner_data_dump = dump_bytes(ser_client_dh_inner_data.get_ref()).unwrap();
-        let set_client_dh_params_dump = dump_bytes(ser_set_client_dh_params.get_ref()).unwrap();
-        
         println!("client_dh_inner_data: {:?}", &client_dh_inner_data);
-        println!("client_dh_inner_data_dump: {}", client_dh_inner_data_dump);
 
         println!("set_client_dh_params: {:?}", &set_client_dh_params);
-        println!("set_client_dh_params_dump: {}", set_client_dh_params_dump);
 
 
         // 7) Thereafter, auth_key equals pow(g, {ab}) mod dh_prime; on the server,
@@ -781,10 +774,7 @@ impl MtProtoConnection {
         // dh_gen_retry#46dc1fb9 nonce:int128 server_nonce:int128 new_nonce_hash2:int128 = Set_client_DH_params_answer;
         // dh_gen_fail#a69dae02 nonce:int128 server_nonce:int128 new_nonce_hash3:int128 = Set_client_DH_params_answer;
 
-        let mut set_client_dh_params_answer_data = Cursor::new(self.receive()?);
-        println!("set_client_dh_params_answer_data: {:?}", set_client_dh_params_answer_data);
-        
-        let set_client_dh_params_answer: constructors::SetClientDHParamsAnswer = set_client_dh_params_answer_data.deserialize(0)?;
+        let set_client_dh_params_answer = self.recv_obj::<constructors::SetClientDHParamsAnswer>()?;
         
         println!("{:?}", set_client_dh_params_answer);
 
@@ -801,6 +791,7 @@ impl MtProtoConnection {
                 let auth_key_hash = hasher.digest().bytes();
 
                 self.auth_key_id = BigEndian::read_i64(&auth_key_hash[12..20]);
+                self.encrypted = true;
 
                 // We good, save some variables
             }, 
@@ -838,6 +829,27 @@ mod tests {
     fn authenticate() {
         let mut connection = MtProtoConnection::new(false).unwrap();
         connection.authenticate().unwrap();
+
+        let get_config = functions::HelpGetConfig;
+
+        let init_connection = functions::InitConnection {
+            api_id: 12332,
+            device_model: "Desktop".into(),
+            system_version: "4.11.5-1".into(),
+            app_version: "0.0.0".into(),
+            lang_code: "en_US".into(),
+            query: Box::new(get_config.into()),
+        };
+
+        let invoke_with_layer = functions::InvokeWithLayer {
+            layer: 66,
+            query: Box::new(init_connection.into()),
+        };
+
+        connection.send_obj(&invoke_with_layer).unwrap();
+        let res = connection.recv_obj::<constructors::TlType>();
+
+        println!("{:?}", res);
     }
 
     #[test]
