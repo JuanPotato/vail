@@ -24,7 +24,7 @@ enum RustType {
     Enum {
         name: String,
         variants: Vec<RustVariant>,
-    }
+    },
 }
 
 #[derive(Debug)]
@@ -56,7 +56,7 @@ impl<'a> From<&'a syn::Field> for RustField {
 
                 tokens.into_string()
             }
-            _ => "This shouldn't happen, and im sorry.".to_string()
+            _ => "This shouldn't happen, and I'm sorry.".to_string(),
         };
 
         let flag_bit = get_attr(&f.attrs, "flag_bit");
@@ -64,9 +64,7 @@ impl<'a> From<&'a syn::Field> for RustField {
         RustField {
             name: name.clone(),
             type_: type_,
-            flag: flag_bit
-                .parse::<i64>()
-                .unwrap_or(0),
+            flag: flag_bit.parse::<i64>().unwrap_or(0),
         }
     }
 }
@@ -83,7 +81,10 @@ impl<'a> From<&'a syn::MacroInput> for RustType {
 
         match input.body {
             syn::Body::Enum(ref variants) => {
-                let m_variants = variants.into_iter().map(|v| v.into()).collect::<Vec<RustVariant>>();
+                let m_variants = variants
+                    .into_iter()
+                    .map(|v| v.into())
+                    .collect::<Vec<RustVariant>>();
 
                 RustType::Enum {
                     name: name,
@@ -93,18 +94,18 @@ impl<'a> From<&'a syn::MacroInput> for RustType {
             syn::Body::Struct(ref v_data) => {
                 let args = match v_data {
                     &syn::VariantData::Struct(ref fields) => {
-                        fields.into_iter()
-                              .map(|f| f.into())
-                              .collect::<Vec<RustField>>()
+                        fields
+                            .into_iter()
+                            .map(|f| f.into())
+                            .collect::<Vec<RustField>>()
                     }
                     &syn::VariantData::Tuple(ref fields) => {
-                        fields.into_iter()
-                              .map(|f| f.into())
-                              .collect::<Vec<RustField>>()
+                        fields
+                            .into_iter()
+                            .map(|f| f.into())
+                            .collect::<Vec<RustField>>()
                     }
-                    &syn::VariantData::Unit => {
-                        Vec::default()
-                    }
+                    &syn::VariantData::Unit => Vec::default(),
                 };
 
                 let tl_id = get_attr(&input.attrs, "tl_id");
@@ -112,9 +113,7 @@ impl<'a> From<&'a syn::MacroInput> for RustType {
                 RustType::Struct {
                     name: name.clone(),
                     tl_id: u32::from_str_radix(&tl_id, 16)
-                        .expect(&format!("Could not parse tl_id ({}) of {}",
-                                         &tl_id,
-                                         &name)),
+                        .expect(&format!("Could not parse tl_id ({}) of {}", &tl_id, &name)),
                     args: args,
                 }
             }
@@ -134,18 +133,18 @@ impl<'a> From<&'a syn::Variant> for RustVariant {
 
         let args = match &v.data {
             &syn::VariantData::Struct(ref fields) => {
-                fields.into_iter()
-                      .map(|f| f.into())
-                      .collect::<Vec<RustField>>()
+                fields
+                    .into_iter()
+                    .map(|f| f.into())
+                    .collect::<Vec<RustField>>()
             }
             &syn::VariantData::Tuple(ref fields) => {
-                fields.into_iter()
-                      .map(|f| f.into())
-                      .collect::<Vec<RustField>>()
+                fields
+                    .into_iter()
+                    .map(|f| f.into())
+                    .collect::<Vec<RustField>>()
             }
-            &syn::VariantData::Unit => {
-                Vec::default()
-            }
+            &syn::VariantData::Unit => Vec::default(),
         };
 
         let tl_id = get_attr(&v.attrs, "tl_id");
@@ -153,9 +152,7 @@ impl<'a> From<&'a syn::Variant> for RustVariant {
         RustVariant {
             name: name.clone(),
             tl_id: u32::from_str_radix(&tl_id, 16)
-                .expect(&format!("Could not parse tl_id ({}) of {}",
-                                 &tl_id,
-                                 &name)),
+                .expect(&format!("Could not parse tl_id ({}) of {}", &tl_id, &name)),
             args: args,
         }
     }
@@ -191,7 +188,7 @@ pub fn tl_ser(input: TokenStream) -> TokenStream {
 
     let ast = syn::parse_macro_input(&s).unwrap();
     let simp = RustType::from(ast);
-    
+
     let gen = impl_ser(&simp);
 
     gen.parse().unwrap()
@@ -237,97 +234,147 @@ fn get_attr(attrs: &[syn::Attribute], key: &str) -> String {
 
 fn impl_to_tltype(t: &RustType) -> String {
     format!(
-        "impl From<{name}> for TlType {{\n    \
-            fn from(x: {name}) -> TlType {{\n        \
-                TlType::{name}(x.into())\n    \
-            }}\n\
-        }}\n",
-    name = match *t {
-        RustType::Struct { ref name, .. } => name,
-        RustType::Enum { ref name, .. } => name
-    })
+        r#"
+impl From<{name}> for TlType {{
+    fn from(x: {name}) -> Self {{
+        TlType::{name}(x.into())
+    }}
+}}"#,
+        name = match *t {
+            RustType::Struct { ref name, .. } => name,
+            RustType::Enum { ref name, .. } => name,
+        }
+    )
 }
 
 fn impl_to_tlfunc(t: &RustType) -> String {
     format!(
-        "impl From<{name}> for TlFunc {{\n    \
-            fn from(x: {name}) -> TlFunc {{\n        \
-                TlFunc::{name}(x.into())\n    \
-            }}\n\
-        }}\n",
-    name = match *t {
-        RustType::Struct { ref name, .. } => name,
-        RustType::Enum { ref name, .. } => name
-    })
+        r#"
+impl From<{name}> for TlFunc {{
+    fn from(x: {name}) -> Self {{
+        TlFunc::{name}(x.into())
+    }}
+}}"#,
+        name = match *t {
+            RustType::Struct { ref name, .. } => name,
+            RustType::Enum { ref name, .. } => name,
+        }
+    )
 }
 
 fn impl_ser(t: &RustType) -> String {
     match *t {
-        RustType::Struct { ref name, tl_id, ref args } => {
+        RustType::Struct {
+            ref name,
+            tl_id,
+            ref args,
+        } => {
             // Begin Serialize
             let mut buf = if args.len() > 0 {
                 format!(
-                "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
-                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
-                        name = name, tl_id = tl_id)
+                    r#"
+impl Serialize<{name}> for Cursor<Vec<u8>> {{
+    fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{
+        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;"#,
+                    name = name,
+                    tl_id = tl_id
+                )
             } else {
                 format!(
-                "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn serialize(&mut self, _: &{name}) -> Result<(), io::Error> {{\n        \
-                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
-                        name = name, tl_id = tl_id)
+                    r#"
+impl Serialize<{name}> for Cursor<Vec<u8>> {{
+    fn serialize(&mut self, _: &{name}) -> Result<(), io::Error> {{
+        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;"#,
+                    name = name,
+                    tl_id = tl_id
+                )
             };
 
             for arg in args {
                 if arg.name == "flags" {
-                    buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+                    buf.push_str(
+                        r#"
+        <Self as Serialize<u32>>::serialize(self, &(0"#,
+                    );
 
                     for arg in args {
                         if arg.flag < 0 {
-                            write!(buf, " | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag.abs() - 1).unwrap();
+                            write!(
+                                buf,
+                                r#" | if obj.{name} {{ 1 }} else {{ 0 }} << {flag}"#,
+                                name = arg.name,
+                                flag = arg.flag.abs() - 1
+                            ).unwrap();
                         } else if arg.flag > 0 {
-                            write!(buf, " | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                name = arg.name, flag = arg.flag - 1).unwrap();
+                            write!(
+                                buf,
+                                r#" | if obj.{name}.is_some() {{ 1 }} else {{ 0 }} << {flag}"#,
+                                name = arg.name,
+                                flag = arg.flag - 1
+                            ).unwrap();
                         }
                     }
 
-                    buf.push_str(" as u32))?;");
+                    buf.push_str(r#" as u32))?;"#);
                     continue;
                 }
 
                 if arg.flag > 0 {
-                    write!(buf,
-                        "        if let Some(ref opt) = obj.{name} {{\n            \
-                                     <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
-                                 }}\n",
-                        type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
+                    write!(
+                        buf,
+                        r#"
+        if let Some(ref opt) = obj.{name} {{
+            <Self as Serialize<{type_}>>::serialize(self, opt)?;
+        }}"#,
+                        type_ = &arg.type_[9..arg.type_.len() - 2],
+                        name = arg.name
+                    ).unwrap();
                 } else if arg.flag == 0 {
-                    write!(buf,
-                        "        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;\n",
-                        type_ = arg.type_, name = arg.name).unwrap();
+                    write!(
+                        buf,
+                        r#"
+        <Self as Serialize<{type_}>>::serialize(self, &obj.{name})?;"#,
+                        type_ = arg.type_,
+                        name = arg.name
+                    ).unwrap();
                 }
             }
 
-            buf.push_str("Ok(())    }\n}\n\n");
+            buf.push_str(
+                r#"
+        Ok(())
+    }
+}"#,
+            );
             // End Serialize
 
             buf
         }
 
-        RustType::Enum { ref variants, ref name } => {
+        RustType::Enum {
+            ref variants,
+            ref name,
+        } => {
             // Begin Serialize
             let mut buf = format!(
-                "impl Serialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{\n        \
-                        match obj {{", name = name);
+                r#"
+impl Serialize<{name}> for Cursor<Vec<u8>> {{
+    fn serialize(&mut self, obj: &{name}) -> Result<(), io::Error> {{
+        match obj {{"#,
+                name = name
+            );
 
             for variant in variants {
-                write!(buf, "\n &{}::{}", name, variant.name).unwrap();
+                write!(
+                    buf,
+                    r#"
+            &{}::{}"#,
+                    name,
+                    variant.name
+                ).unwrap();
 
                 if variant.args.len() > 0 {
-                    buf.push_str(" {");
+                    buf.push_str(r#" {"#);
 
                     let mut add_dotdot = false;
 
@@ -336,61 +383,91 @@ fn impl_ser(t: &RustType) -> String {
                             if arg.name == "flags" {
                                 add_dotdot = true;
                             } else {
-                                write!(buf, " ref {}, ", arg.name).unwrap();
+                                write!(buf, r#" ref {}, "#, arg.name).unwrap();
                             }
                         } else {
-                            write!(buf, " {}, ", arg.name).unwrap();
+                            write!(buf, r#" {}, "#, arg.name).unwrap();
                         }
                     }
 
                     if add_dotdot {
-                        buf.push_str(".. } ");
-                    } else {   
-                        buf.push_str("} ");
+                        buf.push_str(r#".. } "#);
+                    } else {
+                        buf.push_str(r#"} "#);
                     }
                 }
 
-                write!(buf, " => {{\n
-                        <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;\n",
-                        tl_id = variant.tl_id).unwrap();
+                write!(
+                    buf,
+                    r#" => {{
+                <Self as Serialize<u32>>::serialize(self, &{tl_id}u32)?;"#,
+                    tl_id = variant.tl_id
+                ).unwrap();
 
                 for arg in &variant.args {
                     if arg.name == "flags" {
-                        buf.push_str("        <Self as Serialize<u32>>::serialize(self, &(0");
+                        buf.push_str(
+                            r#"
+                <Self as Serialize<u32>>::serialize(self, &(0"#,
+                        );
 
                         for arg in &variant.args {
                             if arg.flag < 0 {
-                                write!(buf, " | if {name} {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag.abs() - 1).unwrap();
+                                write!(
+                                    buf,
+                                    r#" | if {name} {{ 1 }} else {{ 0 }} << {flag}"#,
+                                    name = arg.name,
+                                    flag = arg.flag.abs() - 1
+                                ).unwrap();
                             } else if arg.flag > 0 {
-                                write!(buf, " | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}",
-                                    name = arg.name, flag = arg.flag- 1).unwrap();
+                                write!(
+                                    buf,
+                                    r#" | if {name}.is_some() {{ 1 }} else {{ 0 }} << {flag}"#,
+                                    name = arg.name,
+                                    flag = arg.flag - 1
+                                ).unwrap();
                             }
                         }
 
-                        buf.push_str(" as u32))?;");
+                        buf.push_str(r#" as u32))?;"#);
                         continue;
                     }
 
                     if arg.flag > 0 {
-                        write!(buf,
-                            "        if let &Some(ref opt) = {name} {{\n            \
-                                         <Self as Serialize<{type_}>>::serialize(self, opt)?;\n            \
-                                     }}\n",
-                            type_ = &arg.type_[9..arg.type_.len()-2], name = arg.name).unwrap();
+                        write!(
+                            buf,
+                            r#"
+                if let &Some(ref opt) = {name} {{
+                    <Self as Serialize<{type_}>>::serialize(self, opt)?;
+                }}"#,
+                            type_ = &arg.type_[9..arg.type_.len() - 2],
+                            name = arg.name
+                        ).unwrap();
                     } else if arg.flag == 0 {
-                        write!(buf,
-                            "        <Self as Serialize<{type_}>>::serialize(self, &{name})?;\n",
-                            type_ = arg.type_, name = arg.name).unwrap();
+                        write!(
+                            buf,
+                            r#"
+                <Self as Serialize<{type_}>>::serialize(self, &{name})?;"#,
+                            type_ = arg.type_,
+                            name = arg.name
+                        ).unwrap();
                     }
                 }
 
-                buf.push_str("Ok(()) }\n")
+                buf.push_str(
+                    r#"
+                Ok(())
+            }"#,
+                )
             }
 
-            buf.push_str("        }\n    }\n}\n");
+            buf.push_str(
+                r#"
+        }
+    }
+}"#,
+            );
             // End Serialize
-
 
             buf
         }
@@ -399,123 +476,235 @@ fn impl_ser(t: &RustType) -> String {
 
 fn impl_des(t: &RustType) -> String {
     match *t {
-        RustType::Struct { ref name, tl_id, ref args } => {
+        RustType::Struct {
+            ref name,
+            tl_id,
+            ref args,
+        } => {
             // Begin Deserialize
             let mut buf = format!(
-                "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn _deserialize(&mut self, received_tl_id: u32) -> Result<{name}, io::Error> {{\n        \
-                        let received_tl_id = if received_tl_id == 0 {{ self.deserialize::<u32>(0)? }} else {{ received_tl_id }};\n        \
-                        if received_tl_id != {tl_id} {{
-                            return Err(io::Error::new(io::ErrorKind::InvalidInput, format!(\"Incorrect tl_id for {name}. Expected {tl_id}, received {{}}\", received_tl_id) ));
-                        }}\n",
-                        name = name, tl_id = tl_id);
+                r#"
+impl Deserialize<{name}> for Cursor<Vec<u8>> {{
+    fn _deserialize(&mut self, received_tl_id: u32) -> Result<{name}, io::Error> {{
+        let received_tl_id = if received_tl_id == 0 {{
+            self.deserialize::<u32>(0)?
+        }} else {{
+            received_tl_id
+        }};
+        if received_tl_id != {tl_id} {{
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "Incorrect tl_id for {name}. Expected {tl_id}, received {{}}",
+                    received_tl_id
+                )
+            ));
+        }}"#,
+                name = name,
+                tl_id = tl_id
+            );
 
             for arg in args {
                 let mut is_box = false;
                 let mut fil_type = arg.type_.as_str();
-                
+
                 if fil_type.len() > 9 && &fil_type[0..9] == "Option < " {
-                    fil_type = &fil_type[9..fil_type.len()-2];
+                    fil_type = &fil_type[9..fil_type.len() - 2];
                 }
-                    
+
                 if fil_type.len() > 6 && &fil_type[0..6] == "Box < " {
-                    fil_type = &fil_type[6..fil_type.len()-2];
+                    fil_type = &fil_type[6..fil_type.len() - 2];
                     is_box = true;
                 }
 
                 if arg.flag > 0 {
-                    write!(buf,
-                      "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                   Some({opt_box1}self.deserialize::<{type_}>(0)?{opt_box2})\n            \
-                               }} else {{\n            \
-                                   None\n            \
-                               }};\n",
-                      type_ = fil_type, name = arg.name, flag = arg.flag - 1, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
+                    write!(
+                        buf,
+                        r#"
+        let {name} = if flags & (1 << {flag}) != 0 {{
+            Some({opt_box1}self.deserialize::<{type_}>(0)?{opt_box2})
+        }} else {{
+            None
+        }};"#,
+                        type_ = fil_type,
+                        name = arg.name,
+                        flag = arg.flag - 1,
+                        opt_box1 = if is_box { "Box::new(" } else { "" },
+                        opt_box2 = if is_box { ")" } else { "" }
+                    ).unwrap();
                 } else if arg.flag < 0 {
-                    write!(buf,
-                        "        let {name} = flags & (1 << {flag}) != 0;\n",
-                        name = arg.name, flag = arg.flag.abs() - 1).unwrap();
+                    write!(
+                        buf,
+                        r#"
+        let {name} = flags & (1 << {flag}) != 0;"#,
+                        name = arg.name,
+                        flag = arg.flag.abs() - 1
+                    ).unwrap();
                 } else {
-                    write!(buf,
-                        "        let {name} = self.deserialize::<{type_}>(0)?{opt_box};\n",
-                        type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" }).unwrap();
+                    write!(
+                        buf,
+                        r#"
+        let {name} = self.deserialize::<{type_}>(0)?{opt_box};"#,
+                        type_ = fil_type,
+                        name = arg.name,
+                        opt_box = if is_box { ".into()" } else { "" }
+                    ).unwrap();
                 }
             }
 
-            write!(buf, "Ok({name} {{", name = name).unwrap();
+            write!(
+                buf,
+                r#"
+        Ok({name} {{"#,
+                name = name
+            ).unwrap();
 
             for arg in args {
-                write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
+                write!(
+                    buf,
+                    r#"
+            {name}: {name},"#,
+                    name = arg.name
+                ).unwrap();
             }
-            
-            buf.push_str("})    }\n}\n\n");
-            // End Deserialize
 
+            buf.push_str(
+                r#"
+        })
+    }
+}"#,
+            );
+            // End Deserialize
 
             buf
         }
 
-        RustType::Enum { ref variants, ref name } => {
+        RustType::Enum {
+            ref variants,
+            ref name,
+        } => {
             // Begin Deserialize
             let mut buf = format!(
-                "impl Deserialize<{name}> for Cursor<Vec<u8>> {{\n    \
-                    fn _deserialize(&mut self, received_tl_id: u32) -> Result<{name}, io::Error> {{\n        \
-                        let received_tl_id = if received_tl_id == 0 {{ self.deserialize::<u32>(0)? }} else {{ received_tl_id }};\n        \
-                        match received_tl_id {{", name = name);
+                r#"
+impl Deserialize<{name}> for Cursor<Vec<u8>> {{
+    fn _deserialize(&mut self, received_tl_id: u32) -> Result<{name}, io::Error> {{
+        let received_tl_id = if received_tl_id == 0 {{
+            self.deserialize::<u32>(0)?
+        }} else {{
+            received_tl_id
+        }};
+        match received_tl_id {{"#,
+                name = name
+            );
 
             for variant in variants {
-                write!(buf, "\n {0}u32 => {{\n", variant.tl_id).unwrap();
+                write!(
+                    buf,
+                    r#"
+            {0}u32 => {{"#,
+                    variant.tl_id
+                ).unwrap();
 
                 for arg in &variant.args {
                     let mut is_box = false;
                     let mut fil_type = arg.type_.as_str();
 
                     if fil_type.len() > 9 && &fil_type[0..9] == "Option < " {
-                        fil_type = &fil_type[9..fil_type.len()-2];
+                        fil_type = &fil_type[9..fil_type.len() - 2];
                     }
 
                     if fil_type.len() > 6 && &fil_type[0..6] == "Box < " {
-                        fil_type = &fil_type[6..fil_type.len()-2];
+                        fil_type = &fil_type[6..fil_type.len() - 2];
                         is_box = true;
                     }
 
-                    // Check if primitive and then set whether or not we need to read the id to deserialize
-
+                    // Check if primitive and then set whether we need to read the id to deserialize
                     if arg.flag > 0 {
-                        write!(buf,
-                          "        let {name} = if flags & (1 << {flag}) != 0 {{\n            \
-                                       Some({opt_box1}self.deserialize::<{type_}>(0)?{opt_box2})\n            \
-                                   }} else {{\n            \
-                                       None\n            \
-                                   }};\n",
-                          type_ = fil_type, name = arg.name, flag = arg.flag - 1, opt_box1 = if is_box { "Box::new(" } else { "" }, opt_box2 = if is_box { ")" } else { "" }).unwrap();
+                        write!(
+                            buf,
+                            r#"
+                let {name} = if flags & (1 << {flag}) != 0 {{
+                    Some({opt_box1}self.deserialize::<{type_}>(0)?{opt_box2})
+                }} else {{
+                    None
+                }};"#,
+                            type_ = fil_type,
+                            name = arg.name,
+                            flag = arg.flag - 1,
+                            opt_box1 = if is_box { "Box::new(" } else { "" },
+                            opt_box2 = if is_box { ")" } else { "" }
+                        ).unwrap();
                     } else if arg.flag < 0 {
-                        write!(buf,
-                            "        let {name} = flags & (1 << {flag}) != 0;\n",
-                            name = arg.name, flag = arg.flag.abs() - 1).unwrap();
+                        write!(
+                            buf,
+                            r#"
+                let {name} = flags & (1 << {flag}) != 0;"#,
+                            name = arg.name,
+                            flag = arg.flag.abs() - 1
+                        ).unwrap();
                     } else {
-                        write!(buf,
-                            "        let {name} = self.deserialize::<{type_}>(0)?{opt_box};\n",
-                            type_ = fil_type, name = arg.name, opt_box = if is_box { ".into()" } else { "" }).unwrap();
+                        write!(
+                            buf,
+                            r#"
+                let {name} = self.deserialize::<{type_}>(0)?{opt_box};"#,
+                            type_ = fil_type,
+                            name = arg.name,
+                            opt_box = if is_box { ".into()" } else { "" }
+                        ).unwrap();
                     }
                 }
 
 
-                write!(buf, "Ok({}::{} {{\n", name, variant.name).unwrap();
-                
+                write!(
+                    buf,
+                    r#"
+                Ok({}::{} {{"#,
+                    name,
+                    variant.name
+                ).unwrap();
+
                 for arg in &variant.args {
-                    write!(buf, "{name}: {name}, \n", name = arg.name).unwrap();
+                    write!(
+                        buf,
+                        r#"
+                    {name}: {name},"#,
+                        name = arg.name
+                    ).unwrap();
                 }
-                
-                buf.push_str("}) }\n")
+
+                buf.push_str(
+                    r#"
+                })
+            }"#,
+                )
             }
-            
-            // buf.push_str("_ => {Err(io::Error::new(io::ErrorKind::NotFound, \"You gave me an id for a Type, that id was not for that type. Oh no\"))}");
-            write!(buf, "_ => {{Err(io::Error::new(io::ErrorKind::NotFound, format!(\"No variant of {name} found with tl_id of {{}}\", received_tl_id) ))}}", name = name);
 
-            buf.push_str("        }\n    }\n}\n");
+            // buf.push_str(r#"
+            // _ => {
+            // Err(io::Error::new(
+            // io::ErrorKind::NotFound,
+            // "You gave me an id for a Type, that id was not for that type. Oh no"
+            // ))
+            // }"#);
+            write!(
+                buf,
+                r#"
+            _ => {{
+                Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("No variant of {name} found with tl_id of {{}}", received_tl_id)
+                ))
+            }}"#,
+                name = name
+            ).unwrap();
+
+            buf.push_str(
+                r#"
+        }
+    }
+}"#,
+            );
             // End Deserialize
-
 
             buf
         }

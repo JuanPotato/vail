@@ -49,7 +49,7 @@ pub fn factor(pq: u64) -> (u64, u64) {
                 y = x;
             }
         }
-        
+
         if q > 1 {
             break;
         }
