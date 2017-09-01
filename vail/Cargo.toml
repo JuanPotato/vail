@@ -2,6 +2,7 @@
 authors = ["Juan Potato <hasantiny@gmail.com>", "Brayden Banks <bb010g@gmail.com>"]
 build = "build.rs"
 name = "vail"
+license = "MPL-2.0"
 version = "0.1.0"
 
 [build-dependencies]
