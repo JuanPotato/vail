@@ -1,5 +1,7 @@
-[workspace]
-members = [
-    "vail",
-    "tl_derive",
-]
+[package]
+name = "vail"
+version = "0.1.0"
+authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
+license = "MPL-2.0"
+
+[dependencies]
