@@ -1,4 +1,4 @@
-# Vail
+# Exodia
 
 WIP MTProto implementation in Rust
 
