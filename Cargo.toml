@@ -1,5 +1,5 @@
 [package]
-name = "vail"
+name = "exodia"
 version = "0.1.0"
 authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
 build = "build.rs"
