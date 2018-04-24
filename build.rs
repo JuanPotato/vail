@@ -78,8 +78,10 @@ fn main() {
         let first = tl_constructors.get(group[0]).unwrap();
         let output = if group.len() == 1 && type_ == group[0] {
             write_struct(&first)
+                .expect(&format!("format error while writing struct {}", type_))
         } else {
             write_enum(&group, &tl_constructors, &first.type_.name)
+                .expect(&format!("format error while writing enum {}", type_))
         };
 
         write!(constructors_file, "{}", output).unwrap();
@@ -88,8 +90,8 @@ fn main() {
 
 }
 
-fn write_struct(cons: &TlCombinator) -> String {
-    if cons.args.len() != 0 {
+fn write_struct(cons: &TlCombinator) -> Result<String, std::fmt::Error> {
+    Ok(if cons.args.len() != 0 {
         format!(
             "#[derive(Debug)]\n\
             pub struct {name} {{\n\
@@ -97,17 +99,17 @@ fn write_struct(cons: &TlCombinator) -> String {
             }}\n\n",
 
             name=&cons.name,
-            args=write_args(&cons.args, 4))
+            args=write_args(&cons.args, 4)?)
     } else {
         format!(
             "#[derive(Debug)]\n\
             pub struct {name};\n\n",
 
             name=&cons.name)
-    }
+    })
 }
 
-fn write_enum(group: &[&str], constructors: &HashMap<String, TlCombinator>, type_name: &str) -> String {
+fn write_enum(group: &[&str], constructors: &HashMap<String, TlCombinator>, type_name: &str) -> Result<String, std::fmt::Error> {
     let mut out = format!(
         "#[derive(Debug)]\n\
         pub enum {name} {{",
@@ -125,19 +127,19 @@ fn write_enum(group: &[&str], constructors: &HashMap<String, TlCombinator>, type
                 }},",
 
                 name=&variant_name,
-                args=write_args(&cons.args, 8));
+                args=write_args(&cons.args, 8)?)?;
         } else { 
             writeln!(out, 
                 "\n    {name},",
-                name=&variant_name);
+                name=&variant_name)?;
         }
     }
 
-    writeln!(out, "}}\n");
-    out
+    writeln!(out, "}}\n")?;
+    Ok(out)
 }
 
-fn write_args(args: &[TlArg], indent: usize) -> String {
+fn write_args(args: &[TlArg], indent: usize) -> Result<String, std::fmt::Error> {
     let mut out = String::new();
 
     for arg in args {
@@ -155,11 +157,11 @@ fn write_args(args: &[TlArg], indent: usize) -> String {
             adjusted_type = format!("Option<{}>", adjusted_type);
         }
 
-        writeln!(out, "{:indent$}{}: {},", "", &arg.name, adjusted_type, indent=indent);
+        writeln!(out, "{:indent$}{}: {},", "", &arg.name, adjusted_type, indent=indent)?;
 
     }
 
-    out
+    Ok(out)
 }
 
 fn process_tl_scheme() -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
@@ -169,7 +171,6 @@ fn process_tl_scheme() -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
     tl_scheme_file
         .read_to_string(&mut tl_scheme_contents)
         .expect("Could not read scheme file");
-    let mut i = 0;
 
     let mut tl_functions = Vec::new();
     let mut tl_constructors = HashMap::new();
