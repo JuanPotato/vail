@@ -92,7 +92,7 @@ fn write_struct(cons: &TlCombinator) -> String {
     if cons.args.len() != 0 {
         format!(
             "#[derive(Debug)]\n\
-            struct {name} {{\n\
+            pub struct {name} {{\n\
             {args}\
             }}\n\n",
 
@@ -101,7 +101,7 @@ fn write_struct(cons: &TlCombinator) -> String {
     } else {
         format!(
             "#[derive(Debug)]\n\
-            struct {name};\n\n",
+            pub struct {name};\n\n",
 
             name=&cons.name)
     }
@@ -110,7 +110,7 @@ fn write_struct(cons: &TlCombinator) -> String {
 fn write_enum(group: &[&str], constructors: &HashMap<String, TlCombinator>, type_name: &str) -> String {
     let mut out = format!(
         "#[derive(Debug)]\n\
-        enum {name} {{",
+        pub enum {name} {{",
 
         name=type_name);
 
