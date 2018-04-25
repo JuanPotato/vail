@@ -211,7 +211,7 @@ fn process_tl_scheme() -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
 fn process_tl_line(line: &str) -> TlCombinator {
     lazy_static! {
         static ref SPLITTER: Regex =
-            Regex::new(r"^([\w\.]+)#([0-9a-fA-F]+) (.*?) ?= ([\w\.<>]+);$").unwrap();
+            Regex::new(r"^([\w\.]+)#([0-9a-fA-F]{1,8}) (.*?) ?= ([\w\.<>]+);$").unwrap();
     }
 
     let captures = SPLITTER.captures(line);
