@@ -33,15 +33,30 @@ struct TlType {
     name: String,
     primitive: bool,
     vec: bool,
+    boxed: bool,
+    vec_boxed: bool,
+}
+
+macro_rules! optional {
+    ($var:ident, $default:expr) => (
+        if $var { $default } else { "" }
+    );
+
+
+    ($var:ident, $default:expr, $else:expr) => (
+        if $var { $default } else { $else }
+    )
 }
 
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     let constructors_path = Path::new(&out_dir).join("constructors.rs");
+    let cons_ser_path = Path::new(&out_dir).join("constructors_serialize.rs");
     let functions_path = Path::new(&out_dir).join("functions.rs");
 
     let mut constructors_file = File::create(&constructors_path).unwrap();
+    let mut cons_sed_file = File::create(&cons_ser_path).unwrap();
     let mut functions_file = File::create(&functions_path).unwrap();
 
     let (tl_functions, tl_constructors) = process_tl_scheme();
@@ -76,68 +91,176 @@ fn main() {
 
     for (type_, group) in type_groups {
         let first = tl_constructors.get(group[0]).unwrap();
-        let output = if group.len() == 1 && type_ == group[0] {
-            write_struct(&first)
+        let (obj, ser) = if group.len() == 1 && type_ == group[0] {
+            process_struct(&first)
         } else {
-            write_enum(&group, &tl_constructors, &first.type_.name)
+            process_enum(&group, &tl_constructors, &first.type_.name)
         };
 
-        write!(constructors_file, "{}", output).unwrap();
+        write!(constructors_file, "{}", obj).unwrap();
+        write!(cons_sed_file, "{}", ser).unwrap();
     }
+}
 
+fn process_struct(cons: &TlCombinator) -> (String, String) {
+    (write_struct(cons), ser_struct(cons))
+}
 
+fn ser_struct(cons: &TlCombinator) -> String {
+    format!(
+        "impl<'a> Serialize<&'a {name}> for Cursor<Vec<u8>> {{\n    \
+             fn serialize(&mut self, obj: &{name}, boxed: bool) -> Result<(), io::Error> {{\n        \
+                if boxed {{\n            \
+                    self.serialize(&0x{id:08x}_u32, false)?;\n        \
+                }}\n\n\
+                {args}\n        \
+                Ok(())\n    \
+            }}\n\
+         }}\n\n",
+        name = &cons.name,
+        args = ser_args(&cons.args, 8, true),
+        id = cons.id
+    )
 }
 
 fn write_struct(cons: &TlCombinator) -> String {
     if cons.args.len() != 0 {
         format!(
-            "#[derive(Debug)]\n\
-            struct {name} {{\n\
-            {args}\
-            }}\n\n",
-
-            name=&cons.name,
-            args=write_args(&cons.args, 4))
+"#[derive(Debug)]\n\
+pub struct {name} {{\n\
+    {args}\
+}}\n\n",
+            name = &cons.name,
+            args = write_args(&cons.args, 4, true)
+        )
     } else {
         format!(
-            "#[derive(Debug)]\n\
-            struct {name};\n\n",
-
-            name=&cons.name)
+"#[derive(Debug)]\n\
+    pub struct {name};\n\n",
+            name = &cons.name
+        )
     }
 }
 
-fn write_enum(group: &[&str], constructors: &HashMap<String, TlCombinator>, type_name: &str) -> String {
+fn process_enum(
+    group: &[&str],
+    constructors: &HashMap<String, TlCombinator>,
+    type_name: &str,
+) -> (String, String) {
+    (
+        write_enum(group, constructors, type_name),
+        ser_enum(group, constructors, type_name),
+    )
+}
+
+fn ser_enum(
+    group: &[&str],
+    constructors: &HashMap<String, TlCombinator>,
+    type_name: &str,
+) -> String {
+    let mut out = format!(
+"impl<'a> Serialize<&'a {name}> for Cursor<Vec<u8>> {{\n    \
+    fn serialize(&mut self, obj: &{name}, boxed: bool) -> Result<(), io::Error> {{\n        \
+        if boxed {{\n            \
+            match obj {{",
+
+        name = type_name
+    );
+
+    for variant in group {
+        let cons = constructors.get(*variant).unwrap();
+        let variant_name = filter_variant(&cons.name, &cons.type_.name);
+
+        write!(
+            out,
+            "\n                \
+                {type_name}::{name} {{ .. }} => self.serialize(&0x{id:08x}_u32, false)?,",
+            type_name = type_name,
+            name = &variant_name,
+            id = cons.id,
+        ).unwrap();
+    }
+
+    write!(out, "\n            \
+            }}\n        \
+        }}\n\n        \
+        Ok(())\n        \
+        " // \
+        //match obj {{"
+        ).unwrap();
+    // end if boxed
+
+
+    /*
+    for variant in group {
+        let cons = constructors.get(*variant).unwrap();
+        let variant_name = filter_variant(&cons.name, &cons.type_.name);
+
+        write!(
+            out,
+            "\n            \
+                {type_name}::{name} => {{\n                ",
+            type_name = type_name,
+            name = &variant_name,
+            id = cons.id,
+        );
+
+
+        if cons.args.len() != 0 {
+            writeln!(
+                out,
+                "\n    {name} {{\n\
+                 {args}    \
+                 }},",
+                name = &variant_name,
+                args = write_args(&cons.args, 8, false)
+            );
+        } else {
+            writeln!(out, "\n    {name},", name = &variant_name).unwrap();
+        }
+    }
+    */
+
+
+    writeln!(out, "}}\n").unwrap();
+    writeln!(out, "}}\n").unwrap();
+    out
+}
+
+fn write_enum(
+    group: &[&str],
+    constructors: &HashMap<String, TlCombinator>,
+    type_name: &str,
+) -> String {
     let mut out = format!(
         "#[derive(Debug)]\n\
-        enum {name} {{",
-
-        name=type_name);
+         pub enum {name} {{",
+        name = type_name
+    );
 
     for variant in group {
         let cons = constructors.get(*variant).unwrap();
         let variant_name = filter_variant(&cons.name, &cons.type_.name);
 
         if cons.args.len() != 0 {
-            writeln!(out, 
+            writeln!(
+                out,
                 "\n    {name} {{\n\
-                {args}    \
-                }},",
-
-                name=&variant_name,
-                args=write_args(&cons.args, 8));
-        } else { 
-            writeln!(out, 
-                "\n    {name},",
-                name=&variant_name);
+                 {args}    \
+                 }},",
+                name = &variant_name,
+                args = write_args(&cons.args, 8, false)
+            );
+        } else {
+            writeln!(out, "\n    {name},", name = &variant_name).unwrap();
         }
     }
 
-    writeln!(out, "}}\n");
+    writeln!(out, "}}\n").unwrap();
     out
 }
 
-fn write_args(args: &[TlArg], indent: usize) -> String {
+fn write_args(args: &[TlArg], indent: usize, do_pub: bool) -> String {
     let mut out = String::new();
 
     for arg in args {
@@ -155,8 +278,72 @@ fn write_args(args: &[TlArg], indent: usize) -> String {
             adjusted_type = format!("Option<{}>", adjusted_type);
         }
 
-        writeln!(out, "{:indent$}{}: {},", "", &arg.name, adjusted_type, indent=indent);
+        writeln!(
+            out,
+            "{:indent$}{pu}{name}: {typ},",
+            "",
+            pu = if do_pub { "pub " } else { "" },
+            name = &arg.name,
+            typ = adjusted_type,
+            indent = indent
+        );
+    }
 
+    out
+}
+
+fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
+    let mut out = String::new();
+
+    for arg in args {
+        let as_ref = !arg.type_.primitive
+            || arg.type_.vec
+            || arg.type_.name == "String"
+            || arg.type_.name == "string"
+            || arg.type_.name == "Vec<u8>";
+        
+        let mut ser_arg = arg.name.clone();
+
+        if do_obj {
+            ser_arg = format!("obj.{}", ser_arg);
+        }
+
+        let as_ref_func = match arg.type_.name.as_ref() /* heh */ {
+            "String" | "string" => ".as_bytes()",
+            "Vec<u8>" => ".as_slice()",
+            _ => ".as_ref()"
+        };
+
+        if arg.bit.is_some() {
+            writeln!(
+                out,
+                "\n{empty:indent$}if let Some(ref value) = {obj}{name} {{\n    \
+                    {empty:indent$}self.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;\n\
+                {empty:indent$}}}\n",
+                empty = "",
+                indent = indent,
+                vec_func = if arg.type_.vec { "_vec" } else { "" },
+                obj = if do_obj { "obj." } else { "" },
+                name = &arg.name,
+                as_ref = if as_ref { as_ref_func } else { "" },
+                boxed = arg.type_.boxed,
+                vec = if arg.type_.vec { format!(", {}", arg.type_.vec_boxed) } else { String::new() },
+            );
+        } else {
+            writeln!(
+                out,
+                "{empty:indent$}self.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;",
+                empty = "",
+                indent = indent,
+                vec_func = if arg.type_.vec { "_vec" } else { "" },
+                reff = if !as_ref { "&" } else { "" },
+                obj = if do_obj { "obj." } else { "" },
+                name = &arg.name,
+                as_ref = if as_ref { as_ref_func } else { "" },
+                boxed = arg.type_.boxed,
+                vec = if arg.type_.vec { format!(", {}", arg.type_.vec_boxed) } else { String::new() },
+            );
+        }
     }
 
     out
@@ -224,7 +411,6 @@ fn process_tl_line(line: &str) -> TlCombinator {
         let mut type_ = process_type(tokens.get(4).unwrap().as_str());
         type_.name = fix_reserved_name(&type_.name);
 
-
         TlCombinator {
             name: normalize_name(name.as_str()),
             id: id,
@@ -272,6 +458,11 @@ fn parse_args(argstr: &str) -> Vec<TlArg> {
 
 fn process_type(type_str: &str) -> TlType {
     let (vec, type_) = is_vec(type_str);
+    let vec_boxed = if vec {
+        (type_str.as_bytes()[0] as char).is_uppercase()
+    } else {
+        false
+    };
 
     let mut primitive = false;
     let fixed_type = if let Some(new_name) = is_primitive(type_) {
@@ -281,11 +472,20 @@ fn process_type(type_str: &str) -> TlType {
         normalize_name(type_)
     };
 
+    let boxed = is_boxed(type_str);
+
     TlType {
         name: fixed_type,
         primitive: primitive,
         vec: vec,
+        boxed: boxed,
+        vec_boxed: vec_boxed
     }
+}
+
+fn is_boxed(argument_type: &str) -> bool {
+    let i = argument_type.find(|c| c == '.' || c == '<').map(|m| m + 1).unwrap_or(0);
+    (argument_type.as_bytes()[i] as char).is_uppercase()
 }
 
 fn filter_variant(variant: &str, type_name: &str) -> String {
@@ -358,15 +558,13 @@ fn filter_variant(variant: &str, type_name: &str) -> String {
 
 fn fix_reserved_name(name: &str) -> String {
     match name {
-        "self" | "Self" | "type" | "loop" | "static" | "final"   => {
-            name.to_owned() + "_"
-        }
-        _ => name.to_string()
+        "self" | "Self" | "type" | "loop" | "static" | "final" => name.to_owned() + "_",
+        _ => name.to_string(),
     }
 }
 
 fn is_vec(type_: &str) -> (bool, &str) {
-    if type_.len() > 8 && &type_[0..7] == "Vector<" {
+    if type_.len() > 8 && &type_[0..7].to_lowercase() == "vector<" {
         (true, &type_[7..type_.len() - 1])
     } else {
         (false, &type_)
