@@ -38,12 +38,11 @@ struct TlType {
 }
 
 macro_rules! optional {
-    ($var:ident, $default:expr) => (
+    ($var:expr, $default:expr) => (
         if $var { $default } else { "" }
     );
 
-
-    ($var:ident, $default:expr, $else:expr) => (
+    ($var:expr, $default:expr, $else:expr) => (
         if $var { $default } else { $else }
     )
 }
@@ -184,14 +183,11 @@ fn ser_enum(
     write!(out, "\n            \
             }}\n        \
         }}\n\n        \
-        Ok(())\n        \
-        " // \
-        //match obj {{"
+
+        match obj {{"
         ).unwrap();
-    // end if boxed
 
 
-    /*
     for variant in group {
         let cons = constructors.get(*variant).unwrap();
         let variant_name = filter_variant(&cons.name, &cons.type_.name);
@@ -199,31 +195,26 @@ fn ser_enum(
         write!(
             out,
             "\n            \
-                {type_name}::{name} => {{\n                ",
+                {type_name}::{name} {{",
             type_name = type_name,
             name = &variant_name,
-            id = cons.id,
-        );
+        ).unwrap();
 
-
-        if cons.args.len() != 0 {
-            writeln!(
-                out,
-                "\n    {name} {{\n\
-                 {args}    \
-                 }},",
-                name = &variant_name,
-                args = write_args(&cons.args, 8, false)
-            );
-        } else {
-            writeln!(out, "\n    {name},", name = &variant_name).unwrap();
+        for arg in cons.args.iter() {
+            write!(out, "\n                ref {},", arg.name).unwrap();
         }
+
+        write!(out, "\n            }} => {{\n\
+               {args}            \
+            }},\n",
+            args = ser_args(&cons.args, 16, false)).unwrap();
+
     }
-    */
 
 
-    writeln!(out, "}}\n").unwrap();
-    writeln!(out, "}}\n").unwrap();
+    writeln!(out, "        }}\n\n        \
+             Ok(())\n    \
+         }}\n}}\n").unwrap();
     out
 }
 
@@ -243,20 +234,20 @@ fn write_enum(
         let variant_name = filter_variant(&cons.name, &cons.type_.name);
 
         if cons.args.len() != 0 {
-            writeln!(
+            write!(
                 out,
                 "\n    {name} {{\n\
                  {args}    \
-                 }},",
+                 }},\n",
                 name = &variant_name,
                 args = write_args(&cons.args, 8, false)
-            );
+            ).unwrap();
         } else {
             writeln!(out, "\n    {name},", name = &variant_name).unwrap();
         }
     }
 
-    writeln!(out, "}}\n").unwrap();
+    write!(out, "}}\n\n").unwrap();
     out
 }
 
@@ -278,15 +269,15 @@ fn write_args(args: &[TlArg], indent: usize, do_pub: bool) -> String {
             adjusted_type = format!("Option<{}>", adjusted_type);
         }
 
-        writeln!(
+        write!(
             out,
-            "{:indent$}{pu}{name}: {typ},",
+            "{:indent$}{pu}{name}: {typ},\n",
             "",
             pu = if do_pub { "pub " } else { "" },
             name = &arg.name,
             typ = adjusted_type,
             indent = indent
-        );
+        ).unwrap();
     }
 
     out
@@ -301,12 +292,6 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             || arg.type_.name == "String"
             || arg.type_.name == "string"
             || arg.type_.name == "Vec<u8>";
-        
-        let mut ser_arg = arg.name.clone();
-
-        if do_obj {
-            ser_arg = format!("obj.{}", ser_arg);
-        }
 
         let as_ref_func = match arg.type_.name.as_ref() /* heh */ {
             "String" | "string" => ".as_bytes()",
@@ -315,34 +300,34 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
         };
 
         if arg.bit.is_some() {
-            writeln!(
+            write!(
                 out,
                 "\n{empty:indent$}if let Some(ref value) = {obj}{name} {{\n    \
                     {empty:indent$}self.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;\n\
-                {empty:indent$}}}\n",
+                {empty:indent$}}}\n\n",
                 empty = "",
                 indent = indent,
-                vec_func = if arg.type_.vec { "_vec" } else { "" },
-                obj = if do_obj { "obj." } else { "" },
+                vec_func = optional!(arg.type_.vec, "_vec"),
+                obj = optional!(do_obj, "obj."),
                 name = &arg.name,
-                as_ref = if as_ref { as_ref_func } else { "" },
+                as_ref = optional!(as_ref, as_ref_func),
                 boxed = arg.type_.boxed,
                 vec = if arg.type_.vec { format!(", {}", arg.type_.vec_boxed) } else { String::new() },
-            );
+            ).unwrap();
         } else {
-            writeln!(
+            write!(
                 out,
-                "{empty:indent$}self.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;",
+                "{empty:indent$}self.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;\n",
                 empty = "",
                 indent = indent,
-                vec_func = if arg.type_.vec { "_vec" } else { "" },
-                reff = if !as_ref { "&" } else { "" },
-                obj = if do_obj { "obj." } else { "" },
+                vec_func = optional!(arg.type_.vec, "_vec"),
+                reff = optional!(!as_ref && do_obj, "&"),
+                obj = optional!(do_obj, "obj."),
                 name = &arg.name,
-                as_ref = if as_ref { as_ref_func } else { "" },
+                as_ref = optional!(as_ref, as_ref_func),
                 boxed = arg.type_.boxed,
                 vec = if arg.type_.vec { format!(", {}", arg.type_.vec_boxed) } else { String::new() },
-            );
+            ).unwrap();
         }
     }
 
@@ -356,7 +341,6 @@ fn process_tl_scheme() -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
     tl_scheme_file
         .read_to_string(&mut tl_scheme_contents)
         .expect("Could not read scheme file");
-    let mut i = 0;
 
     let mut tl_functions = Vec::new();
     let mut tl_constructors = HashMap::new();
