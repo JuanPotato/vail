@@ -201,7 +201,11 @@ fn ser_enum(
         ).unwrap();
 
         for arg in cons.args.iter() {
-            write!(out, "\n                ref {},", arg.name).unwrap();
+            if arg.name == "flags" {
+                write!(out, "\n                {}: _,", arg.name).unwrap();
+            } else { 
+                write!(out, "\n                ref {},", arg.name).unwrap();
+            }
         }
 
         write!(out, "\n            }} => {{\n\
@@ -269,24 +273,27 @@ fn write_args(args: &[TlArg], indent: usize, do_pub: bool) -> String {
             adjusted_type = format!("Option<{}>", adjusted_type);
         }
 
-        write!(
+        writeln!(
             out,
-            "{:indent$}{pu}{name}: {typ},\n",
-            "",
+            "{pu}{name}: {typ},",
             pu = if do_pub { "pub " } else { "" },
             name = &arg.name,
             typ = adjusted_type,
-            indent = indent
         ).unwrap();
     }
 
-    out
+    indent_code(&out, indent)
 }
 
 fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
     let mut out = String::new();
 
     for arg in args {
+        if arg.name == "flags" {
+            write!(out, "{}", ser_flags_var(args, 0, do_obj)).unwrap();
+            continue;
+        }
+
         let as_ref = !arg.type_.primitive
             || arg.type_.vec
             || arg.type_.name == "String"
@@ -299,40 +306,59 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             _ => ".as_ref()"
         };
 
+        let vec_boxed = format!(", {}", arg.type_.vec_boxed);
+
         if arg.bit.is_some() {
-            write!(
-                out,
-                "\n{empty:indent$}if let Some(ref value) = {obj}{name} {{\n    \
-                    {empty:indent$}self.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;\n\
-                {empty:indent$}}}\n\n",
-                empty = "",
-                indent = indent,
-                vec_func = optional!(arg.type_.vec, "_vec"),
+            writeln!(out, "\nif let Some(ref value) = {obj}{name} {{",
                 obj = optional!(do_obj, "obj."),
                 name = &arg.name,
+            );
+
+            writeln!(out, "    self.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;",
+                vec_func = optional!(arg.type_.vec, "_vec"),
                 as_ref = optional!(as_ref, as_ref_func),
                 boxed = arg.type_.boxed,
-                vec = if arg.type_.vec { format!(", {}", arg.type_.vec_boxed) } else { String::new() },
+                vec = optional!(arg.type_.vec, &vec_boxed),
             ).unwrap();
+
+            writeln!(out, "}}\n");
         } else {
             write!(
                 out,
-                "{empty:indent$}self.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;\n",
-                empty = "",
-                indent = indent,
+                "self.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;\n",
                 vec_func = optional!(arg.type_.vec, "_vec"),
                 reff = optional!(!as_ref && do_obj, "&"),
                 obj = optional!(do_obj, "obj."),
                 name = &arg.name,
                 as_ref = optional!(as_ref, as_ref_func),
                 boxed = arg.type_.boxed,
-                vec = if arg.type_.vec { format!(", {}", arg.type_.vec_boxed) } else { String::new() },
+                vec = optional!(arg.type_.vec, &vec_boxed),
             ).unwrap();
         }
     }
 
-    out
+    indent_code(&out, indent)
 }
+
+
+fn ser_flags_var(args: &[TlArg], indent: usize, do_obj: bool) -> String {
+    let mut out = String::new();
+
+    writeln!(out, "let mut ser_flags: u32 = 0;\n").unwrap();
+
+    for arg in args {
+        if let Some(bit) = arg.bit {
+            writeln!(out, "if {obj}{name}.is_some() {{", name = arg.name, obj = optional!(do_obj, "obj.")).unwrap();
+            writeln!(out, "    ser_flags |= 1 << {bit};", bit = bit).unwrap();
+            writeln!(out, "}}\n"                                     ).unwrap();
+        }
+    }
+
+    writeln!(out, "self.serialize(&ser_flags, false)?;").unwrap();
+    
+    indent_code(&out, indent)
+}
+
 
 fn process_tl_scheme() -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
     let mut tl_scheme_file = File::open("./scheme.tl").expect("Could not open scheme file");
@@ -579,6 +605,22 @@ fn normalize_name(name: &str) -> String {
         .find_iter(name)
         .map(|s| uppercase_first(s.as_str()))
         .collect::<String>()
+}
+
+fn indent_code(code: &str, indent_level: usize) -> String {
+    let mut indented_code = String::new();
+    let indent = format!("{:indent$}", "", indent=indent_level);
+
+    for line in code.lines() {
+        if line.len() > 0 {
+            indented_code.push_str(&indent);
+        }
+
+        indented_code.push_str(line);
+        indented_code.push('\n');
+    }
+
+    return indented_code;
 }
 
 fn uppercase_first(s: &str) -> String {

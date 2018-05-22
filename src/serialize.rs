@@ -17,6 +17,8 @@ impl<'a, T: 'a> SerializeVector<'a, T> for Cursor<Vec<u8>> where Cursor<Vec<u8>>
             Serialize::<&u32>::serialize(self, &0xd8292816_u32, false)?;
         }
 
+        Serialize::<&i32>::serialize(self, &(vector.len() as i32), false)?;
+
         for element in vector {
             Serialize::<&T>::serialize(self, element, boxed)?;
         }

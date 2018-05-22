@@ -72,14 +72,14 @@ new_session_created#9ec20908 first_msg_id:long unique_id:long server_salt:long =
 
 http_wait#9299359f max_delay:int wait_after:int max_wait:int = HttpWait;
 
-//ipPort ipv4:int port:int = IpPort; // parsed manually
-//help.configSimple#d997c3c5 date:int expires:int dc_id:int ip_port_list:Vector<ipPort> = help.ConfigSimple // parsed manually
+ipPort#d433ad73 ipv4:int port:int = IpPort;
+help.configSimple#d997c3c5 date:int expires:int dc_id:int ip_port_list:Vector<ipPort> = help.ConfigSimple
 
 ---functions---
 
 rpc_drop_answer#58e4a740 req_msg_id:long = RpcDropAnswer;
 
-//get_future_salts#b921bd04 num:int = FutureSalts; // parsed manually
+get_future_salts#b921bd04 num:int = FutureSalts;
 
 ping#7abe77ec ping_id:long = Pong;
 ping_delay_disconnect#f3427b8c ping_id:long disconnect_delay:int = Pong;
