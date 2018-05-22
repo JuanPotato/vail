@@ -1,6 +1,5 @@
-use std::io::Cursor;
-use serialize::Serialize;
-use serialize::SerializeVector;
+use std::io::Write;
+use serialize::{Serializable, Serializer};
 use std::io;
 
 include!(concat!(env!("OUT_DIR"), "/constructors.rs"));

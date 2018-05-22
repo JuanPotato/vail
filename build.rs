@@ -107,10 +107,10 @@ fn process_struct(cons: &TlCombinator) -> (String, String) {
 
 fn ser_struct(cons: &TlCombinator) -> String {
     format!(
-        "impl<'a> Serialize<&'a {name}> for Cursor<Vec<u8>> {{\n    \
-             fn serialize(&mut self, obj: &{name}, boxed: bool) -> Result<(), io::Error> {{\n        \
+        "impl Serializable for {name} {{\n    \
+             fn serialize_into<B: Write>(&self, buf: &mut B, boxed: bool) -> Result<(), io::Error> {{\n        \
                 if boxed {{\n            \
-                    self.serialize(&0x{id:08x}_u32, false)?;\n        \
+                    buf.serialize(&0x{id:08x}_u32, false)?;\n        \
                 }}\n\n\
                 {args}\n        \
                 Ok(())\n    \
@@ -158,10 +158,10 @@ fn ser_enum(
     type_name: &str,
 ) -> String {
     let mut out = format!(
-"impl<'a> Serialize<&'a {name}> for Cursor<Vec<u8>> {{\n    \
-    fn serialize(&mut self, obj: &{name}, boxed: bool) -> Result<(), io::Error> {{\n        \
+"impl Serializable for {name} {{\n    \
+    fn serialize_into<B: Write>(&self, buf: &mut B, boxed: bool) -> Result<(), io::Error> {{\n        \
         if boxed {{\n            \
-            match obj {{",
+            match self {{",
 
         name = type_name
     );
@@ -173,7 +173,7 @@ fn ser_enum(
         write!(
             out,
             "\n                \
-                {type_name}::{name} {{ .. }} => self.serialize(&0x{id:08x}_u32, false)?,",
+                {type_name}::{name} {{ .. }} => buf.serialize(&0x{id:08x}_u32, false)?,",
             type_name = type_name,
             name = &variant_name,
             id = cons.id,
@@ -181,10 +181,10 @@ fn ser_enum(
     }
 
     write!(out, "\n            \
-            }}\n        \
+            }};\n        \
         }}\n\n        \
 
-        match obj {{"
+        match self {{"
         ).unwrap();
 
 
@@ -294,11 +294,12 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             continue;
         }
 
-        let as_ref = !arg.type_.primitive
-            || arg.type_.vec
+        let mut as_ref = !arg.type_.primitive
             || arg.type_.name == "String"
             || arg.type_.name == "string"
             || arg.type_.name == "Vec<u8>";
+
+        as_ref &= !arg.type_.vec;
 
         let as_ref_func = match arg.type_.name.as_ref() /* heh */ {
             "String" | "string" => ".as_bytes()",
@@ -310,11 +311,11 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
 
         if arg.bit.is_some() {
             writeln!(out, "\nif let Some(ref value) = {obj}{name} {{",
-                obj = optional!(do_obj, "obj."),
+                obj = optional!(do_obj, "self."),
                 name = &arg.name,
             );
 
-            writeln!(out, "    self.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;",
+            writeln!(out, "    buf.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;",
                 vec_func = optional!(arg.type_.vec, "_vec"),
                 as_ref = optional!(as_ref, as_ref_func),
                 boxed = arg.type_.boxed,
@@ -325,10 +326,10 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
         } else {
             write!(
                 out,
-                "self.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;\n",
+                "buf.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;\n",
                 vec_func = optional!(arg.type_.vec, "_vec"),
                 reff = optional!(!as_ref && do_obj, "&"),
-                obj = optional!(do_obj, "obj."),
+                obj = optional!(do_obj, "self."),
                 name = &arg.name,
                 as_ref = optional!(as_ref, as_ref_func),
                 boxed = arg.type_.boxed,
@@ -348,13 +349,13 @@ fn ser_flags_var(args: &[TlArg], indent: usize, do_obj: bool) -> String {
 
     for arg in args {
         if let Some(bit) = arg.bit {
-            writeln!(out, "if {obj}{name}.is_some() {{", name = arg.name, obj = optional!(do_obj, "obj.")).unwrap();
+            writeln!(out, "if {obj}{name}.is_some() {{", name = arg.name, obj = optional!(do_obj, "self.")).unwrap();
             writeln!(out, "    ser_flags |= 1 << {bit};", bit = bit).unwrap();
             writeln!(out, "}}\n"                                     ).unwrap();
         }
     }
 
-    writeln!(out, "self.serialize(&ser_flags, false)?;").unwrap();
+    writeln!(out, "buf.serialize(&ser_flags, false)?;").unwrap();
     
     indent_code(&out, indent)
 }

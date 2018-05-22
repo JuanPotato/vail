@@ -1,95 +1,109 @@
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use std::io::{Cursor, Write};
+use std::io::Write;
 use std::io;
 
-pub trait Serialize<T> {
-    fn serialize(&mut self, obj: T, boxed: bool) -> Result<(), io::Error>;
+
+pub trait Serializer: Write where Self: Sized {
+    fn serialize<T: Serializable + ?Sized>(&mut self, obj: &T, boxed: bool) -> Result<(), io::Error> {
+        obj.serialize_into(self, boxed)
+    }
+
+    fn serialize_vec<T: SerializableVector>(&mut self, obj: &T, boxed: bool, vec_boxed: bool) -> Result<(), io::Error> {
+        obj.serialize_vec_into(self, boxed, vec_boxed)
+    }
 }
 
-pub trait SerializeVector<'a, T> {
-    fn serialize_vec(&mut self, obj: &'a [T], boxed: bool, vec_boxed: bool) -> Result<(), io::Error>;
+impl<S: Write> Serializer for S {}
+
+
+pub trait Serializable {
+    fn serialize_into<B: Write>(&self, buf: &mut B, boxed: bool) -> Result<(), io::Error>;
 }
 
-impl<'a, T: 'a> SerializeVector<'a, T> for Cursor<Vec<u8>> where Cursor<Vec<u8>>: Serialize<&'a T> {
-    fn serialize_vec(&mut self, vector: &'a [T], boxed: bool, vec_boxed: bool) -> Result<(), io::Error> {
+pub trait SerializableVector {
+    fn serialize_vec_into<B: Write>(&self, buf: &mut B, boxed: bool, vec_boxed: bool) -> Result<(), io::Error>;
+}
+
+impl<T> SerializableVector for Vec<T> where T: Serializable {
+    fn serialize_vec_into<B: Write>(&self, buf: &mut B, boxed: bool, vec_boxed: bool) -> Result<(), io::Error> {
         if vec_boxed {
-            Serialize::<&u32>::serialize(self, &0xd8292816_u32, false)?;
+            0xd8292816_u32.serialize_into(buf, false)?;
         }
 
-        Serialize::<&i32>::serialize(self, &(vector.len() as i32), false)?;
+        (self.len() as i32).serialize_into(buf, false)?;
 
-        for element in vector {
-            Serialize::<&T>::serialize(self, element, boxed)?;
+        for element in self {
+            element.serialize_into(buf, boxed)?;
         }
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a i32> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &i32, _: bool) -> Result<(), io::Error> {
-        self.write_i32::<LittleEndian>(*obj)?;
+impl Serializable for u32 {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        buf.write_u32::<LittleEndian>(*self)?;
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a u32> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &u32, _: bool) -> Result<(), io::Error> {
-        self.write_u32::<LittleEndian>(*obj)?;
+impl Serializable for i32 {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        buf.write_i32::<LittleEndian>(*self)?;
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a i64> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &i64, _: bool) -> Result<(), io::Error> {
-        self.write_i64::<LittleEndian>(*obj)?;
+impl Serializable for i64 {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        buf.write_i64::<LittleEndian>(*self)?;
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a f64> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &f64, _: bool) -> Result<(), io::Error> {
-        self.write_f64::<LittleEndian>(*obj)?;
+impl Serializable for f64 {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        buf.write_f64::<LittleEndian>(*self)?;
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a [u8; 16]> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &[u8; 16], _: bool) -> Result<(), io::Error> {
-        self.write_all(obj)?;
+impl Serializable for [u8; 16] {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        buf.write_all(self)?;
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a [u8; 32]> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &[u8; 32], _: bool) -> Result<(), io::Error> {
-        self.write_all(obj)?;
+impl Serializable for [u8; 32] {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        buf.write_all(self)?;
 
         Ok(())
     }
 }
 
-impl<'a> Serialize<&'a [u8]> for Cursor<Vec<u8>> {
-    fn serialize(&mut self, obj: &[u8], _: bool) -> Result<(), io::Error> {
-        let mut len = obj.len();
+impl Serializable for [u8] {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        let mut len = self.len();
 
         if len < 254 {
-            self.write_all(&[len as u8])?;
+            buf.write_all(&[len as u8])?;
             len += 1;
         } else {
-            self.write_all(&[254, len as u8, (len >> 8) as u8, (len >> 16) as u8])?; // 3 bytes
+            buf.write_all(&[254, len as u8, (len >> 8) as u8, (len >> 16) as u8])?;
         }
 
-        self.write_all(obj)?;
+        buf.write_all(self)?;
 
         for _ in 0..(4 - (len % 4)) % 4 {
-            self.write_all(&[00u8])?;
+            buf.write_all(&[00u8])?;
         }
 
         Ok(())

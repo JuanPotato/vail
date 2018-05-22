@@ -7,7 +7,7 @@ pub mod serialize;
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-    use serialize::Serialize;
+    use serialize::Serializer;
     use types::User;
     use types;
     use super::dump_bytes;
