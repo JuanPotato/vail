@@ -1,5 +1,7 @@
+#![feature(test)]
 #![allow(dead_code)]
 extern crate byteorder;
+extern crate test;
 
 pub mod types;
 pub mod serialize;
@@ -11,7 +13,64 @@ mod tests {
     use types::User;
     use types;
     use super::dump_bytes;
+    use test::Bencher;
 
+
+    #[bench]
+    fn bench_user(b: &mut Bencher) {
+        let mut buffer = Cursor::new(Vec::<u8>::new());
+
+        let u = User::User {
+            id: 0x123,
+            flags: 0,
+            self_: Some(Box::new(types::True)),
+            contact: None,
+            mutual_contact: None,
+            deleted: None,
+            bot: None,
+            bot_chat_history: None,
+            bot_nochats: None,
+            verified: None,
+            restricted: None,
+            min: None,
+            bot_inline_geo: None,
+            access_hash: None,
+            first_name: None,
+            last_name: None,
+            username: Some("JuanPotato".into()),
+            phone: None,
+            photo: None,
+            status: None,
+            bot_info_version: None,
+            restriction_reason: None,
+            bot_inline_placeholder: None,
+            lang_code: None,
+        };
+
+        b.iter(|| buffer.serialize(&u, true));
+    }
+
+    #[bench]
+    fn bench_salt(b: &mut Bencher) {
+        let mut buffer = Cursor::new(Vec::<u8>::new());
+
+        let mut salts = Vec::new();
+        for _ in 0..100 {
+            salts.push(types::FutureSalt {
+                valid_since: 0x1EAD_BEEF_i32,
+                valid_until: 0x1A2B_3C4D_i32,
+                salt: 0x123A_BC46_50FE_3C61_i64,
+            });
+        }
+
+        let f = types::FutureSalts {
+            req_msg_id: 0x1012_3456_789A_BCDE_i64,
+            now: 0x1234_5678,
+            salts: salts,
+        };
+
+        b.iter(|| buffer.serialize(&f, true));
+    }
 
     #[test]
     fn salt() {
