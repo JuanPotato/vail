@@ -294,12 +294,7 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             continue;
         }
 
-        let mut as_ref = !arg.type_.primitive
-            || arg.type_.name == "String"
-            || arg.type_.name == "string"
-            || arg.type_.name == "Vec<u8>";
-
-        as_ref &= !arg.type_.vec;
+        let mut as_ref = !arg.type_.primitive && !arg.type_.vec;
 
         let as_ref_func = match arg.type_.name.as_ref() /* heh */ {
             "String" | "string" => ".as_bytes()",
@@ -313,7 +308,7 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             writeln!(out, "\nif let Some(ref value) = {obj}{name} {{",
                 obj = optional!(do_obj, "self."),
                 name = &arg.name,
-            );
+            ).unwrap();
 
             writeln!(out, "    buf.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;",
                 vec_func = optional!(arg.type_.vec, "_vec"),
@@ -322,7 +317,7 @@ fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
                 vec = optional!(arg.type_.vec, &vec_boxed),
             ).unwrap();
 
-            writeln!(out, "}}\n");
+            writeln!(out, "}}\n").unwrap();
         } else {
             write!(
                 out,
@@ -588,7 +583,7 @@ fn is_primitive(type_: &str) -> Option<&'static str> {
         "int" => Some("i32"),
         "long" => Some("i64"),
         "double" => Some("f64"),
-        "int128" => Some("[u8; 16]"),
+        "int128" => Some("i128"),
         "int256" => Some("[u8; 32]"),
         "string" => Some("String"),
         "bytes" => Some("Vec<u8>"),

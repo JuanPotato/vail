@@ -6,7 +6,10 @@ build = "build.rs"
 license = "MPL-2.0"
 
 [dependencies]
-byteorder = "1.2.2"
+
+[dependencies.byteorder]
+version = "1"
+features = ["i128"]
 
 [build-dependencies]
 regex = "0.2"

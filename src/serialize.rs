@@ -73,9 +73,9 @@ impl Serializable for f64 {
     }
 }
 
-impl Serializable for [u8; 16] {
+impl Serializable for i128 {
     fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
-        buf.write_all(self)?;
+        buf.write_i128::<LittleEndian>(*self)?;
 
         Ok(())
     }
@@ -89,24 +89,34 @@ impl Serializable for [u8; 32] {
     }
 }
 
-impl Serializable for [u8] {
+impl Serializable for Vec<u8> {
     fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
-        let mut len = self.len();
-
-        if len < 254 {
-            buf.write_all(&[len as u8])?;
-            len += 1;
-        } else {
-            buf.write_all(&[254, len as u8, (len >> 8) as u8, (len >> 16) as u8])?;
-        }
-
-        buf.write_all(self)?;
-
-        for _ in 0..(4 - (len % 4)) % 4 {
-            buf.write_all(&[00u8])?;
-        }
-
-        Ok(())
+        serialize_bytes(buf, self)
     }
 }
 
+impl Serializable for String {
+    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<(), io::Error> {
+        serialize_bytes(buf, self.as_bytes())
+    }
+}
+
+
+fn serialize_bytes<B: Write>(buf: &mut B, slice: &[u8]) -> Result<(), io::Error> {
+    let mut len = slice.len();
+
+    if len < 254 {
+        buf.write_all(&[len as u8])?;
+        len += 1;
+    } else {
+        buf.write_all(&[254, len as u8, (len >> 8) as u8, (len >> 16) as u8])?;
+    }
+
+    buf.write_all(slice)?;
+
+    for _ in 0..(4 - (len % 4)) % 4 {
+        buf.write_all(&[00u8])?;
+    }
+
+    Ok(())
+}
