@@ -2,30 +2,72 @@ extern crate byteorder;
 
 pub mod types;
 pub mod serialize;
+pub mod deserialize;
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-    use serialize::Serializer;
+    use std::io::{Cursor, Seek};
+    use std::fmt::Debug;
+    use serialize::{Serializer, Serializable};
+    use deserialize::{Deserializer, Deserializable};
     use types::User;
     use types;
+    use super::*;
+
+    fn ser_des_equal<T: Serializable + Deserializable + PartialEq + Debug>(orig: &T, boxed: bool) {
+        let mut buffer = Cursor::new(Vec::<u8>::new());
+
+        buffer.serialize(orig, boxed).unwrap();
+        println!("{}", dump_bytes(buffer.get_ref()).unwrap());
+
+        let orig_pos = buffer.position();
+        buffer.seek(std::io::SeekFrom::Start(0)).unwrap();
+
+        let read: T = buffer.deserialize(boxed).unwrap();
+
+        assert_eq!(*orig, read);
+        assert_eq!(orig_pos, buffer.position());
+    }
 
     #[test]
-    fn vec_string() {
-        let mut buffer = Vec::<u8>::new();
+    #[allow(overflowing_literals)]
+    fn i32() {
+        ser_des_equal(&0xDEADC0DE_i32, false);
+    }
 
-        let mut f = Vec::new();
-        f.push(String::from("Abc"));
+    #[test]
+    fn u32() {
+        ser_des_equal(&0xDEADC0DE_u32, false);
+    }
 
-        buffer.serialize_vec(&f, true, true);
+    #[test]
+    #[allow(overflowing_literals)]
+    fn i64() {
+        ser_des_equal(&0xDEADC0DE_BEEFCAFE_i64, false);
+    }
 
-        println!("{}", dump_bytes(buffer.as_slice()).unwrap());
+    #[test]
+    fn f64() {
+        ser_des_equal(&(5674893.56978 as f64), false);
+    }
+
+    #[test]
+    fn strings() {
+        let mut orig: String = 
+            "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\
+             0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\
+             0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF\
+             0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF01234567".into();
+
+        for _ in 0..12 {
+            println!("len: {}", orig.len());
+            ser_des_equal(&orig, false);
+            orig.push('!');
+        }
     }
 
     #[test]
     fn salt() {
-        let mut buffer = Vec::<u8>::new();
-
         let mut salts = Vec::new();
         salts.push(types::FutureSalt {
             valid_since: 0x1EAD_BEEF_i32,
@@ -39,15 +81,12 @@ mod tests {
             salts: salts,
         };
 
-        buffer.serialize(&f, true);
-
-        println!("{}", dump_bytes(buffer.as_slice()).unwrap());
-        println!("{:?}", buffer.as_slice());
+        ser_des_equal(&f, true);
     }
 
     #[test]
     fn user() {
-        let mut buffer = Vec::<u8>::new();
+        let mut buffer = Cursor::new(Vec::<u8>::new());
 
         let u = User::User {
             id: 0x123,
@@ -76,9 +115,16 @@ mod tests {
             lang_code: None,
         };
 
-        buffer.serialize(&u, true);
+        buffer.serialize(&u, true).unwrap();
+        buffer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-        println!("{}", dump_bytes(buffer.as_slice()).unwrap());
+        println!("{}", dump_bytes(buffer.get_ref()).unwrap());
+
+        let new_u: User = buffer.deserialize(true).unwrap();
+
+        println!("{:?}", &u);
+        println!("{:?}", &new_u);
+
     }
 
     fn dump_bytes(buf: &[u8]) -> Result<String, std::fmt::Error> {
