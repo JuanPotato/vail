@@ -3,5 +3,7 @@ name = "vail"
 version = "0.1.0"
 authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
 license = "MPL-2.0"
+description = "Telegram MTProto client"
+repository = "https://github.com/JuanPotato/vail"
 
 [dependencies]
