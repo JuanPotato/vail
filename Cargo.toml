@@ -1,16 +1,6 @@
-[package]
-name = "vail"
-version = "0.1.0"
-authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
-build = "build.rs"
-license = "MPL-2.0"
-
-[dependencies]
-
-[dependencies.byteorder]
-version = "1"
-features = ["i128"]
-
-[build-dependencies]
-regex = "0.2"
-lazy_static = "1.0"
+[workspace]
+members = [
+    "vail",
+    "vail_mtproto",
+    "vail_types",
+]
