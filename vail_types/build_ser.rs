@@ -13,11 +13,14 @@ use std::collections::HashMap;
 pub fn ser_struct(cons: &TlCombinator) -> String {
     format!(
 "impl Serializable for {name} {{
-    #[allow(unused_mut)]
-    fn serialize_into<B: Write>(&self, buf: &mut B, boxed: bool) -> Result<()> {{
-        if boxed {{
-            buf.serialize(&0x{id:08x}_u32, false)?;
-        }}\n\
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {{
+        buf.serialize(&0x{id:08x}_u32)?; 
+        self.serialize_bare(buf)
+    }}
+
+    #[allow(unused_variables, unused_mut)]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {{\n\
         {args}
         Ok(())
     }}
@@ -35,9 +38,8 @@ pub fn ser_enum(
 ) -> String {
     let mut out = format!(
 "impl Serializable for {name} {{
-    fn serialize_into<B: Write>(&self, buf: &mut B, boxed: bool) -> Result<()> {{
-        if boxed {{
-            match self {{",
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {{
+        match self {{\n",
 
         name = type_name
     );
@@ -46,20 +48,23 @@ pub fn ser_enum(
         let cons = constructors.get(*variant).unwrap();
         let variant_name = filter_variant(&cons.name, &cons.type_.name);
 
-        write!(
-            out,
-            "\n                \
-                {type_name}::{name} {{ .. }} => buf.serialize(&0x{id:08x}_u32, false)?,",
+        writeln!(
+            out, 
+"             {type_name}::{name} {{ .. }} => buf.serialize(&0x{id:08x}_u32)?,",
             type_name = type_name,
             name = &variant_name,
             id = cons.id,
         ).unwrap();
     }
 
-    write!(out, "\n            \
-            }};\n        \
-        }}\n\n        \
+    writeln!(out, 
+"        }};
 
+        self.serialize_bare(buf)
+    }}
+
+    #[allow(unused_variables, unused_mut)]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {{
         match self {{"
         ).unwrap();
 
@@ -123,25 +128,19 @@ pub fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
                 name = &arg.name,
             ).unwrap();
 
-            writeln!(out, "    buf.serialize{vec_func}(value{as_ref}, {boxed}{vec})?;",
-                vec_func = optional!(arg.type_.vec, "_vec"),
+            writeln!(out, "    buf.serialize(value{as_ref})?;",
                 as_ref = optional!(as_ref, as_ref_func),
-                boxed = arg.type_.boxed,
-                vec = optional!(arg.type_.vec, &vec_boxed),
             ).unwrap();
 
             writeln!(out, "}}\n").unwrap();
         } else {
             write!(
                 out,
-                "buf.serialize{vec_func}({reff}{obj}{name}{as_ref}, {boxed}{vec})?;\n",
-                vec_func = optional!(arg.type_.vec, "_vec"),
+                "buf.serialize({reff}{obj}{name}{as_ref})?;\n",
                 reff = optional!(!as_ref && do_obj, "&"),
                 obj = optional!(do_obj, "self."),
                 name = &arg.name,
                 as_ref = optional!(as_ref, as_ref_func),
-                boxed = arg.type_.boxed,
-                vec = optional!(arg.type_.vec, &vec_boxed),
             ).unwrap();
         }
     }
@@ -162,7 +161,7 @@ pub fn ser_flags_var(args: &[TlArg], indent: usize, do_obj: bool) -> String {
         }
     }
 
-    writeln!(out, "buf.serialize(&ser_flags, false)?;").unwrap();
+    writeln!(out, "buf.serialize(&ser_flags)?;").unwrap();
     
     indent_code(&out, indent)
 }

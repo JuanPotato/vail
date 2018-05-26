@@ -23,11 +23,17 @@ pub fn des_struct(cons: &TlCombinator) -> String {
 
     format!( 
 "impl Deserializable for {name} {{
+    #[inline]
+    fn deserialize_from<B: Read>(buf: &mut B) -> Result<Self> {{
+        let id = u32::deserialize_from(buf)?;
+        assert_eq!(id, 0x{id:08x});
+
+        Self::deserialize_bare(buf, id)
+    }}
+
     #[allow(unused_variables)]
-    fn deserialize_from_id<B: Read>(buf: &mut B, boxed: bool, id: u32) -> Result<{name}> {{
-        if boxed {{
-            assert_eq!(id, 0x{id:08x});
-        }}\n\
+    fn deserialize_bare<B: Read>(buf: &mut B, id: u32) -> Result<{name}> {{
+        assert_eq!(id, 0x{id:08x});\n\
         {args}\n\
         {gen_self}    \
     }}
@@ -46,8 +52,14 @@ pub fn des_enum(
 ) -> String {
     let mut out = format!(
 "impl Deserializable for {name} {{\n    \
-    #[allow(unused_variables)]
-    fn deserialize_from_id<B: Read>(buf: &mut B, _boxed: bool, id: u32) -> Result<{name}> {{\n        \
+    #[inline]
+    fn deserialize_from<B: Read>(buf: &mut B) -> Result<Self> {{
+        let id = u32::deserialize_from(buf)?;
+        Self::deserialize_bare(buf, id)
+    }}
+
+    #[allow(unused_variables, unused_mut)]
+    fn deserialize_bare<B: Read>(buf: &mut B, id: u32) -> Result<{name}> {{\n        \
         match id {{",
 
         name = type_name
@@ -116,11 +128,7 @@ pub fn des_args(args: &[TlArg], indent: usize) -> String {
                 out.push_str("Box::new(");
             }
 
-            write!(out, "buf.deserialize{vec_func}({boxed}{vec})?",
-                vec_func = optional!(arg.type_.vec, "_vec"),
-                boxed = arg.type_.boxed,
-                vec = optional!(arg.type_.vec, &vec_boxed),
-            ).unwrap();
+            out.push_str("buf.deserialize()?");
 
             out.push(')');
 
@@ -140,13 +148,7 @@ pub fn des_args(args: &[TlArg], indent: usize) -> String {
                 out.push_str("Box::new(");
             }
 
-            write!(
-                out,
-                "buf.deserialize{vec_func}({boxed}{vec})?",
-                vec_func = optional!(arg.type_.vec, "_vec"),
-                boxed = arg.type_.boxed,
-                vec = optional!(arg.type_.vec, &vec_boxed),
-            ).unwrap();
+            out.push_str("buf.deserialize()?");
 
             if add_boxing {
                 out.push(')');

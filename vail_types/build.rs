@@ -55,12 +55,16 @@ fn main() {
     let constructors_path = Path::new(&out_dir).join("constructors.rs");
     let cons_ser_path = Path::new(&out_dir).join("constructors_serialize.rs");
     let cons_des_path = Path::new(&out_dir).join("constructors_deserialize.rs");
-    //let functions_path = Path::new(&out_dir).join("functions.rs");
+
+    let functions_path = Path::new(&out_dir).join("functions.rs");
+    let func_ser_path = Path::new(&out_dir).join("functions_serialize.rs");
 
     let mut constructors_file = File::create(&constructors_path).unwrap();
     let mut cons_ser_file = File::create(&cons_ser_path).unwrap();
     let mut cons_des_file = File::create(&cons_des_path).unwrap();
-    //let mut functions_file = File::create(&functions_path).unwrap();
+
+    let mut functions_file = File::create(&functions_path).unwrap();
+    let mut func_ser_file = File::create(&func_ser_path).unwrap();
 
     let (tl_functions, tl_constructors) = process_tl_scheme();
 
@@ -103,6 +107,14 @@ fn main() {
         write!(constructors_file, "{}", obj).unwrap();
         write!(cons_ser_file, "{}", ser).unwrap();
         write!(cons_des_file, "{}", des).unwrap();
+    }
+
+    for func in tl_functions {
+        let obj = write_struct(&func);
+        let ser = ser_struct(&func);
+
+        write!(functions_file, "{}", obj).unwrap();
+        write!(func_ser_file, "{}", ser).unwrap();
     }
 }
 

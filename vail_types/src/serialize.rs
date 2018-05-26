@@ -8,12 +8,9 @@ use std::io::{Write, Result};
 
 
 pub trait Serializer: Write + Sized {
-    fn serialize<T: Serializable>(&mut self, obj: &T, boxed: bool) -> Result<()> {
-        obj.serialize_into(self, boxed)
-    }
-
-    fn serialize_vec<T: SerializableVector>(&mut self, obj: &T, boxed: bool, vec_boxed: bool) -> Result<()> {
-        obj.serialize_vec_into(self, boxed, vec_boxed)
+    #[inline]
+    fn serialize<T: Serializable>(&mut self, obj: &T) -> Result<()> {
+        obj.serialize_into(self)
     }
 }
 
@@ -21,23 +18,24 @@ impl<S: Write> Serializer for S {}
 
 
 pub trait Serializable {
-    fn serialize_into<B: Write>(&self, buf: &mut B, boxed: bool) -> Result<()>;
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()>;
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()>;
 }
 
-pub trait SerializableVector {
-    fn serialize_vec_into<B: Write>(&self, buf: &mut B, boxed: bool, vec_boxed: bool) -> Result<()>;
-}
+impl<T: Serializable> Serializable for Vec<T> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        0xd8292816_u32.serialize_into(buf)?;
 
-impl<T> SerializableVector for Vec<T> where T: Serializable {
-    fn serialize_vec_into<B: Write>(&self, buf: &mut B, boxed: bool, vec_boxed: bool) -> Result<()> {
-        if vec_boxed {
-            0xd8292816_u32.serialize_into(buf, false)?;
-        }
+        self.serialize_bare(buf)
+    }
 
-        (self.len() as i32).serialize_into(buf, false)?;
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
+        (self.len() as i32).serialize_into(buf)?;
 
         for element in self {
-            element.serialize_into(buf, boxed)?;
+            element.serialize_into(buf)?;
         }
 
         Ok(())
@@ -45,7 +43,13 @@ impl<T> SerializableVector for Vec<T> where T: Serializable {
 }
 
 impl Serializable for u32 {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         buf.write_u32::<LittleEndian>(*self)?;
 
         Ok(())
@@ -53,7 +57,13 @@ impl Serializable for u32 {
 }
 
 impl Serializable for i32 {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         buf.write_i32::<LittleEndian>(*self)?;
 
         Ok(())
@@ -61,7 +71,13 @@ impl Serializable for i32 {
 }
 
 impl Serializable for i64 {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         buf.write_i64::<LittleEndian>(*self)?;
 
         Ok(())
@@ -69,7 +85,13 @@ impl Serializable for i64 {
 }
 
 impl Serializable for f64 {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         buf.write_f64::<LittleEndian>(*self)?;
 
         Ok(())
@@ -77,7 +99,13 @@ impl Serializable for f64 {
 }
 
 impl Serializable for i128 {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         buf.write_i128::<LittleEndian>(*self)?;
 
         Ok(())
@@ -85,7 +113,13 @@ impl Serializable for i128 {
 }
 
 impl Serializable for [u8; 32] {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         buf.write_all(self)?;
 
         Ok(())
@@ -93,13 +127,25 @@ impl Serializable for [u8; 32] {
 }
 
 impl Serializable for Vec<u8> {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         serialize_bytes(buf, self)
     }
 }
 
 impl Serializable for String {
-    fn serialize_into<B: Write>(&self, buf: &mut B, _boxed: bool) -> Result<()> {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        self.serialize_bare(buf)
+    }
+
+    #[inline]
+    fn serialize_bare<B: Write>(&self, buf: &mut B) -> Result<()> {
         serialize_bytes(buf, self.as_bytes())
     }
 }

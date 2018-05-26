@@ -16,18 +16,19 @@ mod tests {
     use deserialize::{Deserializer, Deserializable};
     use types::User;
     use types;
+    use types::Bare;
     use super::*;
 
-    fn ser_des_equal<T: Serializable + Deserializable + PartialEq + Debug>(orig: &T, boxed: bool) {
+    fn ser_des_equal<T: Serializable + Deserializable + PartialEq + Debug>(orig: &T) {
         let mut buffer = Cursor::new(Vec::<u8>::new());
 
-        buffer.serialize(orig, boxed).unwrap();
+        buffer.serialize(orig).unwrap();
         println!("{}", dump_bytes(buffer.get_ref()).unwrap());
 
         let orig_pos = buffer.position();
         buffer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
-        let read: T = buffer.deserialize(boxed).unwrap();
+        let read: T = buffer.deserialize().unwrap();
 
         assert_eq!(*orig, read);
         assert_eq!(orig_pos, buffer.position());
@@ -36,23 +37,23 @@ mod tests {
     #[test]
     #[allow(overflowing_literals)]
     fn i32() {
-        ser_des_equal(&0xDEADC0DE_i32, false);
+        ser_des_equal(&0xDEADC0DE_i32);
     }
 
     #[test]
     fn u32() {
-        ser_des_equal(&0xDEADC0DE_u32, false);
+        ser_des_equal(&0xDEADC0DE_u32);
     }
 
     #[test]
     #[allow(overflowing_literals)]
     fn i64() {
-        ser_des_equal(&0xDEADC0DE_BEEFCAFE_i64, false);
+        ser_des_equal(&0xDEADC0DE_BEEFCAFE_i64);
     }
 
     #[test]
     fn f64() {
-        ser_des_equal(&(5674893.56978 as f64), false);
+        ser_des_equal(&(5674893.56978 as f64));
     }
 
     #[test]
@@ -65,7 +66,7 @@ mod tests {
 
         for _ in 0..12 {
             println!("len: {}", orig.len());
-            ser_des_equal(&orig, false);
+            ser_des_equal(&orig);
             orig.push('!');
         }
     }
@@ -85,7 +86,7 @@ mod tests {
             salts: salts,
         };
 
-        ser_des_equal(&f, true);
+        ser_des_equal(&f);
     }
 
     #[test]
@@ -119,12 +120,12 @@ mod tests {
             lang_code: None,
         };
 
-        buffer.serialize(&u, true).unwrap();
+        buffer.serialize(&u).unwrap();
         buffer.seek(std::io::SeekFrom::Start(0)).unwrap();
 
         println!("{}", dump_bytes(buffer.get_ref()).unwrap());
 
-        let new_u: User = buffer.deserialize(true).unwrap();
+        let new_u: User = buffer.deserialize().unwrap();
 
         println!("{:?}", &u);
         println!("{:?}", &new_u);

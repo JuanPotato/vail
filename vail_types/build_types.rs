@@ -68,9 +68,18 @@ pub fn write_args(args: &[TlArg], indent: usize, do_pub: bool) -> String {
     for arg in args {
         let mut adjusted_type = arg.type_.name.clone();
 
+        if !arg.type_.boxed && !arg.type_.primitive {
+            adjusted_type = format!("Bare<{}>", adjusted_type);
+        }
+
         if arg.type_.vec {
             adjusted_type = format!("Vec<{}>", adjusted_type);
+
+            if !arg.type_.vec_boxed {
+                adjusted_type = format!("Bare<{}>", adjusted_type);
+            }
         }
+
 
         if !arg.type_.primitive && !arg.type_.vec {
             adjusted_type = format!("Box<{}>", adjusted_type);
