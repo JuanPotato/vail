@@ -74,16 +74,16 @@ mod tests {
     #[test]
     fn salt() {
         let mut salts = Vec::new();
-        salts.push(types::FutureSalt {
+        salts.push(Bare(types::FutureSalt {
             valid_since: 0x1EAD_BEEF_i32,
             valid_until: 0x1A2B_3C4D_i32,
             salt: 0x123A_BC46_50FE_3C61_i64,
-        });
+        }));
 
         let f = types::FutureSalts {
             req_msg_id: 0x1012_3456_789A_BCDE_i64,
             now: 0x1234_5678,
-            salts: salts,
+            salts: Bare(salts),
         };
 
         ser_des_equal(&f);
@@ -96,7 +96,7 @@ mod tests {
         let u = User::User {
             id: 0x123,
             flags: 0,
-            self_: Some(Box::new(types::True)),
+            self_: Some(Box::new(Bare(types::True))),
             contact: None,
             mutual_contact: None,
             deleted: None,

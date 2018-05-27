@@ -33,7 +33,6 @@ pub fn des_struct(cons: &TlCombinator) -> String {
 
     #[allow(unused_variables)]
     fn deserialize_bare<B: Read>(buf: &mut B, id: u32) -> Result<{name}> {{
-        assert_eq!(id, 0x{id:08x});\n\
         {args}\n\
         {gen_self}    \
     }}

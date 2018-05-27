@@ -8,7 +8,7 @@ use deserialize::{Deserializable, Deserializer};
 
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Bare<T>(T);
+pub struct Bare<T>(pub T);
 
 impl<T: Serializable> Serializable for Bare<T> {
     #[inline]
