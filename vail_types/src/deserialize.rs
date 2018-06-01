@@ -31,7 +31,7 @@ impl<T> Deserializable for Vec<T> where T: Deserializable {
     #[inline]
     fn deserialize_from<B: Read>(buf: &mut B) -> Result<Self> {
         let id = u32::deserialize_from(buf)?;
-        assert_eq!(id, 0xd8292816_u32);
+        assert_eq!(id, 0x1cb5c415_u32);
 
         Self::deserialize_bare(buf, id)
     }

@@ -5,8 +5,12 @@
 extern crate byteorder;
 
 pub mod types;
+pub mod methods;
 pub mod serialize;
 pub mod deserialize;
+
+pub const LAYER: u32 = 75;
+
 
 #[cfg(test)]
 mod tests {

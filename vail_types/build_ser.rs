@@ -120,8 +120,6 @@ pub fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             _ => ".as_ref()"
         };
 
-        let vec_boxed = format!(", {}", arg.type_.vec_boxed);
-
         if arg.bit.is_some() {
             writeln!(out, "\nif let Some(ref value) = {obj}{name} {{",
                 obj = optional!(do_obj, "self."),

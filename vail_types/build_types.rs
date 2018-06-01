@@ -29,6 +29,17 @@ args = write_args(&cons.args, 4, true)
         }
 }
 
+pub fn write_method(cons: &TlCombinator) -> String {
+    format!(
+"impl Method for {method} {{
+    type ReturnType = {types}{return_type};
+}}\n\n\n",
+    method = &cons.name,
+    types = if !(cons.type_.primitive || cons.type_.vec) { "types::" } else { "" },
+    return_type = &cons.type_.name
+    )
+}
+
 pub fn write_enum(
     group: &[&str],
     constructors: &HashMap<String, TlCombinator>,

@@ -110,8 +110,6 @@ pub fn des_args(args: &[TlArg], indent: usize) -> String {
     let mut out = String::new();
 
     for arg in args {
-        let vec_boxed = format!(", {}", arg.type_.vec_boxed);
-
         let add_boxing = !arg.type_.primitive && !arg.type_.vec;
 
         if let Some(bit) = arg.bit {

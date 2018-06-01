@@ -25,7 +25,7 @@ pub trait Serializable {
 impl<T: Serializable> Serializable for Vec<T> {
     #[inline]
     fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
-        0xd8292816_u32.serialize_into(buf)?;
+        0x1cb5c415_u32.serialize_into(buf)?;
 
         self.serialize_bare(buf)
     }

@@ -18,7 +18,7 @@ mod build_utils;
 mod build_process_scheme;
 use build_process_scheme::process_tl_scheme;
 mod build_types;
-use build_types::{write_enum, write_struct};
+use build_types::{write_enum, write_struct, write_method};
 mod build_ser;
 use build_ser::{ser_enum, ser_struct};
 mod build_des;
@@ -112,8 +112,10 @@ fn main() {
     for func in tl_functions {
         let obj = write_struct(&func);
         let ser = ser_struct(&func);
+        let impl_meth = write_method(&func);
 
         write!(functions_file, "{}", obj).unwrap();
+        write!(functions_file, "{}", impl_meth).unwrap();
         write!(func_ser_file, "{}", ser).unwrap();
     }
 }
