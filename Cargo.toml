@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "prog",
+    "prog_async",
     "vail",
     "vail_mtproto",
     "vail_types",
