@@ -1,0 +1,21 @@
+[package]
+name = "prog_async"
+version = "0.1.0"
+authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
+
+[dependencies]
+tokio = "0.1"
+tokio-io = "0.1"
+tokio-codec = "0.1.0"
+futures = "0.1"
+
+bytes = "0.4"
+byteorder = "1.2.3"
+crc = "1.8.1"
+openssl = "0.10.8"
+time = "0.1.40"
+
+vail_types = { path = "../vail_types" }
+rand = { version = "0.5", features = ["i128_support"] }
+lazy_static = "1"
+failure = "0.1.1"
