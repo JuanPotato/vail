@@ -1,0 +1,15 @@
+[package]
+name = "prog"
+version = "0.1.0"
+authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
+
+[dependencies]
+vail_types = { path = "../vail_types" }
+rand = { version = "0.5", features = ["i128_support"] }
+time = "0.1"
+crc = "1.8.1"
+byteorder = "1.2.3"
+lazy_static = "1"
+openssl = "0.10.8"
+failure = "0.1.1"
+
