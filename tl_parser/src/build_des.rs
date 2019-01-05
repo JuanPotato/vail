@@ -112,7 +112,16 @@ pub fn des_args(args: &[TlArg], indent: usize) -> String {
     for arg in args {
         let add_boxing = !arg.type_.primitive && !arg.type_.vec;
 
-        if let Some(bit) = arg.bit {
+        if arg.type_.true_type {
+            println!("{:?}", arg);
+            let bit = arg.bit.unwrap();
+
+            writeln!(out, "\nlet {name} = flags & 1 << {bit} != 0;",
+                name = &arg.name,
+                bit = bit,
+            ).unwrap();
+
+        } else if let Some(bit) = arg.bit {
             writeln!(out, "\nlet {name} = if flags & 1 << {bit} != 0 {{",
                 name = &arg.name,
                 bit = bit,

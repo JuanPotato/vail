@@ -15,8 +15,7 @@ use TlArg;
 use TlCombinator;
 
 
-pub fn process_tl_scheme() -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
-    let mut tl_scheme_file = File::open("./scheme.tl").expect("Could not open scheme file");
+pub fn process_tl_scheme(tl_scheme_file: &mut File) -> (Vec<TlCombinator>, HashMap<String, TlCombinator>) {
     let mut tl_scheme_contents = String::new();
 
     tl_scheme_file
@@ -98,9 +97,11 @@ pub fn parse_args(argstr: &str) -> Vec<TlArg> {
         if arg_piece.is_empty() {
             continue;
         }
+        
         if &arg_piece[..1] == "{" {
             continue;
         }
+
         if let Some(tokens) = ARG_REGEX.captures(arg_piece.trim()) {
             let name = tokens.get(1).unwrap();
             let bit = tokens.get(2).map(|n| n.as_str().parse::<usize>().unwrap());
@@ -130,6 +131,7 @@ pub fn process_type(type_str: &str) -> TlType {
     };
 
     let mut primitive = false;
+
     let fixed_type = if let Some(new_name) = is_primitive(type_) {
         primitive = true;
         new_name.to_string()
@@ -144,7 +146,8 @@ pub fn process_type(type_str: &str) -> TlType {
         primitive: primitive,
         vec: vec,
         boxed: boxed,
-        vec_boxed: vec_boxed
+        vec_boxed: vec_boxed,
+        true_type: type_ == "true",
     }
 }
 

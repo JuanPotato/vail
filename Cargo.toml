@@ -5,4 +5,5 @@ members = [
     "vail",
     "vail_mtproto",
     "vail_types",
+    "tl_parser",
 ]

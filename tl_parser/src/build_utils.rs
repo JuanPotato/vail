@@ -142,6 +142,8 @@ pub fn is_vec(type_: &str) -> (bool, &str) {
 
 pub fn is_primitive(type_: &str) -> Option<&'static str> {
     match type_ {
+        "Bool" => Some("bool"),
+        "true" => Some("bool"),
         "#" => Some("u32"),
         "int" => Some("i32"),
         "long" => Some("i64"),

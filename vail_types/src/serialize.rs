@@ -42,6 +42,23 @@ impl<T: Serializable> Serializable for Vec<T> {
     }
 }
 
+impl Serializable for bool {
+    #[inline]
+    fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {
+        if *self {
+            buf.serialize(&0x997275b5_u32)?
+        } else {
+            buf.serialize(&0xbc799737_u32)?
+        };
+
+        Ok(())
+    }
+
+    fn serialize_bare<B: Write>(&self, _buf: &mut B) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl Serializable for u32 {
     #[inline]
     fn serialize_into<B: Write>(&self, buf: &mut B) -> Result<()> {

@@ -49,6 +49,27 @@ impl<T> Deserializable for Vec<T> where T: Deserializable {
     }
 }
 
+impl Deserializable for bool {
+    #[inline]
+    fn deserialize_from<B: Read>(buf: &mut B) -> Result<Self> {
+        let id = u32::deserialize_from(buf)?;
+
+        Self::deserialize_bare(buf, id)
+    }
+
+    #[inline]
+    fn deserialize_bare<B: Read>(_buf: &mut B, id: u32) -> Result<bool> {
+        if id == 0x997275b5 {
+            Ok(true)
+        } else if id == 0xbc799737 {
+            Ok(false)
+        } else {
+            // honestly this should never happen
+            panic!("Why did this happen");
+        }
+    }
+}
+
 impl Deserializable for u32 {
     #[inline]
     fn deserialize_from<B: Read>(buf: &mut B) -> Result<Self> {

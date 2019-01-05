@@ -120,6 +120,11 @@ pub fn ser_args(args: &[TlArg], indent: usize, do_obj: bool) -> String {
             _ => ".as_ref()"
         };
 
+
+        if arg.type_.true_type {
+            continue;
+        }
+
         if arg.bit.is_some() {
             writeln!(out, "\nif let Some(ref value) = {obj}{name} {{",
                 obj = optional!(do_obj, "self."),
@@ -153,7 +158,11 @@ pub fn ser_flags_var(args: &[TlArg], indent: usize, do_obj: bool) -> String {
 
     for arg in args {
         if let Some(bit) = arg.bit {
-            writeln!(out, "if {obj}{name}.is_some() {{", name = arg.name, obj = optional!(do_obj, "self.")).unwrap();
+            writeln!(out, "if {deref}{obj}{name}{is_some} {{",
+                deref = optional!(arg.type_.true_type && !do_obj, "*"),
+                name = arg.name,
+                obj = optional!(do_obj, "self."),
+                is_some = optional!(!arg.type_.true_type, ".is_some()")).unwrap();
             writeln!(out, "    ser_flags |= 1 << {bit};", bit = bit).unwrap();
             writeln!(out, "}}\n"                                     ).unwrap();
         }

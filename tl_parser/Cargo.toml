@@ -1,12 +1,15 @@
 [package]
-name = "vail_types"
+name = "tl_parser"
 version = "0.1.0"
 authors = ["Hasan Ibraheem <hasantiny@gmail.com>"]
 license = "MPL-2.0"
-description = "MTProto scheme types for Vail"
+description = "MTProto TL parser for Vail"
 repository = "https://github.com/JuanPotato/vail"
 
 [dependencies]
+quicli = "0.3"
+lazy_static = "1.0"
+regex = "0.2"
 
 [dependencies.byteorder]
 version = "1"

@@ -13,6 +13,6 @@ pub trait Method where Self: Serializable, Self::ReturnType: Deserializable {
     type ReturnType;
 }
 
-include!(concat!(env!("OUT_DIR"), "/functions.rs"));
-include!(concat!(env!("OUT_DIR"), "/functions_serialize.rs"));
+include!("functions.rs");
+include!("functions_serialize.rs");
 

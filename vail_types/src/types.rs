@@ -35,7 +35,7 @@ impl<T: Deserializable> Deserializable for Bare<T> {
 }
 
 
-include!(concat!(env!("OUT_DIR"), "/constructors.rs"));
-include!(concat!(env!("OUT_DIR"), "/constructors_serialize.rs"));
-include!(concat!(env!("OUT_DIR"), "/constructors_deserialize.rs"));
+include!("constructors.rs");
+include!("constructors_serialize.rs");
+include!("constructors_deserialize.rs");
 

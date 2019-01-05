@@ -91,12 +91,11 @@ pub fn write_args(args: &[TlArg], indent: usize, do_pub: bool) -> String {
             }
         }
 
-
         if !arg.type_.primitive && !arg.type_.vec {
             adjusted_type = format!("Box<{}>", adjusted_type);
         }
 
-        if arg.bit.is_some() {
+        if arg.bit.is_some() && !arg.type_.true_type {
             adjusted_type = format!("Option<{}>", adjusted_type);
         }
 
